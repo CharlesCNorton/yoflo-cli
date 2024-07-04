@@ -6,7 +6,6 @@ import time
 from datetime import datetime
 
 import cv2
-import numpy as np
 import torch
 from huggingface_hub import hf_hub_download
 from PIL import Image
@@ -17,7 +16,7 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 class YOFLO:
     def __init__(self, model_path=None, debug=False, display_inference_speed=False,
-                 pretty_print=False, alert_on="yes", inference_limit=None):
+                 pretty_print=False, alert_on="yes", inference_limit=None, flicker_protection=False):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
         self.processor = None
@@ -38,6 +37,9 @@ class YOFLO:
         self.alert_on = alert_on.lower()
         self.inference_limit = inference_limit
         self.last_inference_time = 0
+        self.flicker_protection = flicker_protection
+        self.last_detection = None
+        self.last_detection_count = 0
 
         if model_path:
             self.init_model(model_path)
@@ -63,6 +65,14 @@ class YOFLO:
                 inferences_per_second = self.inference_count / elapsed_time
                 if self.display_inference_speed:
                     logging.info(f"Inferences/sec: {inferences_per_second:.2f}")
+
+    def check_flicker(self, current_detection):
+        if self.last_detection == current_detection:
+            self.last_detection_count += 1
+        else:
+            self.last_detection = current_detection
+            self.last_detection_count = 1
+        return self.last_detection_count >= 2
 
     def run_object_detection(self, image):
         try:
@@ -168,6 +178,8 @@ class YOFLO:
                             results['<OD>']['bboxes'], results['<OD>']['labels']
                         )
                     ]
+                    if self.flicker_protection and not self.check_flicker(detections):
+                        continue
                     if self.headless:
                         if self.pretty_print:
                             self.pretty_print_detections(detections)
@@ -189,6 +201,8 @@ class YOFLO:
                 results = self.run_expression_comprehension(image_pil, self.phrase)
                 if results:
                     clean_result = results.replace('<s>', '').replace('</s>', '').strip().lower()
+                    if self.flicker_protection and not self.check_flicker(clean_result):
+                        continue
                     if self.headless:
                         if self.pretty_print:
                             self.pretty_print_expression(results)
@@ -285,6 +299,7 @@ def main():
     parser.add_argument("-pp", "--pretty_print", action='store_true', help="Enable pretty print for detections")
     parser.add_argument("-ao", "--alert_on", type=str, choices=["yes", "no"], default="yes", help="Trigger alert on 'yes' or 'no' result")
     parser.add_argument("-il", "--inference_limit", type=float, help="Limit the inference rate to X inferences per second", required=False)
+    parser.add_argument("-fp", "--flicker_protection", action='store_true', help="Enable flicker protection for inferences")
 
     args = parser.parse_args()
 
@@ -296,14 +311,14 @@ def main():
             yo_flo = YOFLO(
                 debug=args.debug, display_inference_speed=args.inference_speed,
                 pretty_print=args.pretty_print, alert_on=args.alert_on,
-                inference_limit=args.inference_limit
+                inference_limit=args.inference_limit, flicker_protection=args.flicker_protection
             )
             yo_flo.download_model()
         else:
             yo_flo = YOFLO(
                 model_path=args.model_path, debug=args.debug, display_inference_speed=args.inference_speed,
                 pretty_print=args.pretty_print, alert_on=args.alert_on,
-                inference_limit=args.inference_limit
+                inference_limit=args.inference_limit, flicker_protection=args.flicker_protection
             )
 
         if args.class_name:
