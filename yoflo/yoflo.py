@@ -11,7 +11,7 @@ from huggingface_hub import hf_hub_download
 import argparse
 
 class YO_FLO:
-    def __init__(self, model_path=None, debug=False, display_inference_speed=False, pretty_print=False):
+    def __init__(self, model_path=None, debug=False, display_inference_speed=False, pretty_print=False, alert_on="yes"):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
         self.processor = None
@@ -22,13 +22,14 @@ class YO_FLO:
         self.debug = debug
         self.object_detection_active = False
         self.screenshot_active = False
-        self.beep_active = False
+        self.log_to_file_active = False
         self.headless = True
         self.display_inference_speed = display_inference_speed
         self.stop_webcam_flag = threading.Event()
         self.last_beep_time = 0
         self.webcam_thread = None
         self.pretty_print = pretty_print
+        self.alert_on = alert_on.lower()
 
         if model_path:
             self.init_model(model_path)
@@ -141,9 +142,28 @@ class YO_FLO:
                     if detections:
                         if self.screenshot_active and not self.headless:
                             self.save_screenshot(frame)
-                        if self.beep_active and time.time() - self.last_beep_time > 1:
-                            self.beep_sound()
-                            self.last_beep_time = time.time()
+
+                        if self.log_to_file_active:
+                            self.log_alert("Detections: " + str(detections))
+
+            elif self.phrase:
+                results = self.run_expression_comprehension(image_pil, self.phrase)
+                if results:
+                    clean_result = results.replace('<s>', '').replace('</s>', '').strip().lower()
+                    if self.headless:
+                        if self.pretty_print:
+                            self.pretty_print_expression(results)
+                        else:
+                            print("Expression Comprehension:", results)
+                    self.inference_count += 1
+                    self.update_inference_rate()
+
+                    if clean_result == self.alert_on:
+                        if self.screenshot_active and not self.headless:
+                            self.save_screenshot(frame)
+
+                        if self.log_to_file_active:
+                            self.log_alert(f"Expression Comprehension: {clean_result} at {datetime.now()}")
 
             if not self.headless:
                 cv2.imshow('Object Detection', frame)
@@ -170,22 +190,21 @@ class YO_FLO:
         except Exception as e:
             print(f"Error saving screenshot: {e}")
 
-    def beep_sound(self):
+    def log_alert(self, message):
         try:
-            if os.name == 'nt':
-                os.system('echo \a')
-            else:
-                print('\a')
+            with open("alerts.log", "a") as log_file:
+                log_file.write(f"{datetime.now()} - {message}\n")
+            print(f"Logged alert: {message}")
         except Exception as e:
-            print(f"Error producing beep sound: {e}")
+            print(f"Error logging alert: {e}")
 
     def toggle_screenshot(self):
         self.screenshot_active = not self.screenshot_active
         print(f"Screenshot on detection is now {'enabled' if self.screenshot_active else 'disabled'}")
 
-    def toggle_beep(self):
-        self.beep_active = not self.beep_active
-        print(f"Beep on detection is now {'enabled' if self.beep_active else 'disabled'}")
+    def toggle_log_to_file(self):
+        self.log_to_file_active = not self.log_to_file_active
+        print(f"Log to file on detection is now {'enabled' if self.log_to_file_active else 'disabled'}")
 
     def toggle_object_detection(self):
         self.object_detection_active = not self.object_detection_active
@@ -202,6 +221,11 @@ class YO_FLO:
             bbox_str = f"[{bbox[0]:.2f}, {bbox[1]:.2f}, {bbox[2]:.2f}, {bbox[3]:.2f}]"
             print(f"- {label}: {bbox_str} at {timestamp}")
 
+    def pretty_print_expression(self, results):
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        clean_result = results.replace('<s>', '').replace('</s>', '').strip()
+        print(f"Expression Comprehension: {clean_result} at {timestamp}")
+
 def main():
     parser = argparse.ArgumentParser(description="YO-FLO: A proof-of-concept in using advanced vision models as a YOLO alternative.")
     parser.add_argument("--model_path", type=str, help="Path to the pre-trained model directory")
@@ -210,11 +234,12 @@ def main():
     parser.add_argument("--debug", action='store_true', help="Enable debug mode")
     parser.add_argument("--headless", action='store_true', help="Run in headless mode without displaying video")
     parser.add_argument("--screenshot", action='store_true', help="Enable screenshot on detection")
-    parser.add_argument("--beep", action='store_true', help="Enable beep on detection")
+    parser.add_argument("--log_to_file", action='store_true', help="Enable logging alerts to file")
     parser.add_argument("--inference_speed", action='store_true', help="Display inference speed")
     parser.add_argument("--object_detection", action='store_true', help="Enable object detection")
     parser.add_argument("--download_model", action='store_true', help="Download model from Hugging Face")
     parser.add_argument("--pretty_print", action='store_true', help="Enable pretty print for detections")
+    parser.add_argument("--alert_on", type=str, choices=["yes", "no"], default="yes", help="Trigger alert on 'yes' or 'no' result")
 
     args = parser.parse_args()
 
@@ -225,10 +250,10 @@ def main():
 
     try:
         if args.download_model:
-            yo_flo = YO_FLO(debug=args.debug, display_inference_speed=args.inference_speed, pretty_print=args.pretty_print)
+            yo_flo = YO_FLO(debug=args.debug, display_inference_speed=args.inference_speed, pretty_print=args.pretty_print, alert_on=args.alert_on)
             yo_flo.download_model()
         else:
-            yo_flo = YO_FLO(model_path=args.model_path, debug=args.debug, display_inference_speed=args.inference_speed, pretty_print=args.pretty_print)
+            yo_flo = YO_FLO(model_path=args.model_path, debug=args.debug, display_inference_speed=args.inference_speed, pretty_print=args.pretty_print, alert_on=args.alert_on)
 
         if args.class_name:
             yo_flo.class_name = args.class_name
@@ -236,7 +261,7 @@ def main():
         if args.phrase:
             yo_flo.phrase = args.phrase
 
-        yo_flo.headless = args.headless  # Set headless mode based on the argument
+        yo_flo.headless = args.headless
 
         if args.object_detection:
             yo_flo.toggle_object_detection()
@@ -244,11 +269,10 @@ def main():
         if args.screenshot:
             yo_flo.toggle_screenshot()
 
-        if args.beep:
-            yo_flo.toggle_beep()
+        if args.log_to_file:
+            yo_flo.toggle_log_to_file()
 
-        if args.object_detection:
-            yo_flo.start_webcam_detection()
+        yo_flo.start_webcam_detection()
 
         try:
             while True:
