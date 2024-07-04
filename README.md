@@ -1,7 +1,7 @@
 
-# YO-FLO-CLI
+# YOFLO-CLI
 
-YO-FLO-CLI is a command-line interface for the YO-FLO package, providing advanced object detection and binary inference capabilities using the Florence-2 vision-language model in real-time. This tool leverages state-of-the-art vision models to perform tasks such as object detection and binary inference based on referring expression comprehension.
+YOFLO-CLI is a command-line interface for the YO-FLO package, providing advanced object detection and binary inference capabilities using the Florence-2 vision-language model in real-time. This tool leverages state-of-the-art vision models to perform tasks such as object detection and binary inference based on referring expression comprehension.
 
 ## Features
 
@@ -52,11 +52,11 @@ yoflo --model_path /path/to/model --class_name "cat" --phrase "Is the person smi
 yoflo --model_path ./models/florence-2 --class_name "dog" --phrase "Is the dog sitting?" --debug --screenshot --beep
 ```
 
-This command starts the YO-FLO-CLI tool using the Florence-2 model located in `./models/florence-2`, sets the target class to "dog", and the binary inference phrase to "Is the dog sitting?". The `--debug` flag enables debug mode for detailed output. The `--screenshot` and `--beep` flags enable screenshot capture and sound alerts upon detection, respectively.
+This command starts the YOFLO-CLI tool using the Florence-2 model located in `./models/florence-2`, sets the target class to "dog", and the binary inference phrase to "Is the dog sitting?". The `--debug` flag enables debug mode for detailed output. The `--screenshot` and `--beep` flags enable screenshot capture and sound alerts upon detection, respectively.
 
 ## Script Overview
 
-The core functionality of YO-FLO-CLI is encapsulated in the `yoflo.py` script. Here’s a high-level overview of its capabilities:
+The core functionality of YOFLO-CLI is encapsulated in the `yoflo.py` script. Here’s a high-level overview of its capabilities:
 
 - **Model Initialization**: Loads the Florence-2 model and processor.
 - **Object Detection**: Uses the model to detect objects in images and annotate them with bounding boxes and labels.
@@ -78,7 +78,7 @@ The core functionality of YO-FLO-CLI is encapsulated in the `yoflo.py` script. H
 
 ## Development Status
 
-YO-FLO-CLI is currently in the process of being converted into a full Python package. We are starting small with just object detection and binary inference based on referring expression comprehension. Future updates will include optimizations and additional features as the project evolves.
+YOFLO-CLI is currently in the process of being converted into a full Python package. We are starting small with just object detection and binary inference based on referring expression comprehension. Future updates will include optimizations and additional features as the project evolves.
 
 ## License
 
