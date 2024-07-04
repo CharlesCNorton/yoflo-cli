@@ -12,6 +12,7 @@ YOFLO-CLI is a command-line interface for the YO-FLO package, providing advanced
 - **Screenshot on Detection**: Automatically capture and save a screenshot when a target object is detected.
 - **Sound Alert on Detection**: Play a sound alert when a target object is detected.
 - **Headless Mode**: Run the tool without displaying the video feed, suitable for server environments.
+- **Pretty Print**: Enable formatted output of detections for better readability.
 
 ## Model Information
 
@@ -33,7 +34,7 @@ This tool uses Microsoft's Florence-2, a powerful vision-language model designed
 ## Usage
 
 ```sh
-yoflo --model_path /path/to/model --class_name "cat" --phrase "Is the person smiling?" --debug --screenshot --beep
+yoflo --model_path /path/to/model --class_name "cat" --phrase "Is the person smiling?" --debug --screenshot --beep --headless --pretty_print
 ```
 
 ### Command-line Arguments
@@ -45,16 +46,12 @@ yoflo --model_path /path/to/model --class_name "cat" --phrase "Is the person smi
 - `--headless`: Run in headless mode without displaying the video feed.
 - `--screenshot`: Enable screenshot on detection.
 - `--beep`: Enable beep on detection.
+- `--inference_speed`: Display inference speed.
+- `--object_detection`: Enable object detection.
+- `--download_model`: Download model from Hugging Face.
+- `--pretty_print`: Enable pretty print for detections.
 
-## Example
-
-```sh
-yoflo --model_path ./models/florence-2 --class_name "dog" --phrase "Is the dog sitting?" --debug --screenshot --beep
-```
-
-This command starts the YOFLO-CLI tool using the Florence-2 model located in `./models/florence-2`, sets the target class to "dog", and the binary inference phrase to "Is the dog sitting?". The `--debug` flag enables debug mode for detailed output. The `--screenshot` and `--beep` flags enable screenshot capture and sound alerts upon detection, respectively.
-
-## Script Overview
+## Core Functionality
 
 The core functionality of YOFLO-CLI is encapsulated in the `yoflo.py` script. Here’s a high-level overview of its capabilities:
 
@@ -75,6 +72,7 @@ The core functionality of YOFLO-CLI is encapsulated in the `yoflo.py` script. He
 - `beep_sound()`: Plays a sound alert when a target object is detected.
 - `toggle_screenshot()`: Toggles the screenshot feature on or off.
 - `toggle_beep()`: Toggles the beep feature on or off.
+- `pretty_print_detections()`: Formats and prints detection results with datetime for readability.
 
 ## Development Status
 
