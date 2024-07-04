@@ -9,6 +9,7 @@ import time
 from datetime import datetime
 from huggingface_hub import hf_hub_download
 import argparse
+import logging
 
 class YO_FLO:
     def __init__(self, model_path=None, debug=False, display_inference_speed=False, pretty_print=False, alert_on="yes"):
@@ -158,7 +159,7 @@ class YO_FLO:
                     self.inference_count += 1
                     self.update_inference_rate()
 
-                    if clean_result == self.alert_on:
+                        if clean_result == self.alert_on:
                         if self.screenshot_active and not self.headless:
                             self.save_screenshot(frame)
 
@@ -228,25 +229,23 @@ class YO_FLO:
 
 def main():
     parser = argparse.ArgumentParser(description="YO-FLO: A proof-of-concept in using advanced vision models as a YOLO alternative.")
-    parser.add_argument("-mp", "--model_path", type=str, help="Path to the pre-trained model directory")
-    parser.add_argument("-cn", "--class_name", type=str, help="Class name to detect (e.g., 'cat', 'dog')")
-    parser.add_argument("-ph", "--phrase", type=str, help="Yes/No question for expression comprehension (e.g., 'Is the person smiling?')")
-    parser.add_argument("-d", "--debug", action='store_true', help="Enable debug mode")
-    parser.add_argument("-hl", "--headless", action='store_true', help="Run in headless mode without displaying video")
-    parser.add_argument("-ss", "--screenshot", action='store_true', help="Enable screenshot on detection")
-    parser.add_argument("-lf", "--log_to_file", action='store_true', help="Enable logging alerts to file")
-    parser.add_argument("-is", "--inference_speed", action='store_true', help="Display inference speed")
-    parser.add_argument("-od", "--object_detection", action='store_true', help="Enable object detection")
-    parser.add_argument("-dm", "--download_model", action='store_true', help="Download model from Hugging Face")
-    parser.add_argument("-pp", "--pretty_print", action='store_true', help="Enable pretty print for detections")
-    parser.add_argument("-ao", "--alert_on", type=str, choices=["yes", "no"], default="yes", help="Trigger alert on 'yes' or 'no' result")
+    parser.add_argument("--model_path", type=str, help="Path to the pre-trained model directory", required=False)
+    parser.add_argument("--class_name", type=str, help="Class name to detect (e.g., 'cat', 'dog')")
+    parser.add_argument("--phrase", type=str, help="Yes/No question for expression comprehension (e.g., 'Is the person smiling?')")
+    parser.add_argument("--debug", action='store_true', help="Enable debug mode")
+    parser.add_argument("--headless", action='store_true', help="Run in headless mode without displaying video")
+    parser.add_argument("--screenshot", action='store_true', help="Enable screenshot on detection")
+    parser.add_argument("--log_to_file", action='store_true', help="Enable logging alerts to file")
+    parser.add_argument("--inference_speed", action='store_true', help="Display inference speed")
+    parser.add_argument("--object_detection", action='store_true', help="Enable object detection")
+    parser.add_argument("--download_model", action='store_true', help="Download model from Hugging Face")
+    parser.add_argument("--pretty_print", action='store_true', help="Enable pretty print for detections")
+    parser.add_argument("--alert_on", type=str, choices=["yes", "no"], default="yes", help="Trigger alert on 'yes' or 'no' result")
 
     args = parser.parse_args()
 
     if not args.model_path and not args.download_model:
-        print("Error: You must specify either --model_path or --download_model.")
-        parser.print_help()
-        return
+        parser.error("You must specify either --model_path or --download_model.")
 
     try:
         if args.download_model:
