@@ -11,7 +11,7 @@ from huggingface_hub import hf_hub_download
 import argparse
 
 class YO_FLO:
-    def __init__(self, model_path=None, debug=False):
+    def __init__(self, model_path=None, debug=False, display_inference_speed=False):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
         self.processor = None
@@ -23,13 +23,14 @@ class YO_FLO:
         self.object_detection_active = False
         self.screenshot_active = False
         self.beep_active = False
+        self.headless = True
+        self.display_inference_speed = display_inference_speed
         self.stop_webcam_flag = threading.Event()
         self.last_beep_time = 0
+        self.webcam_thread = None
 
         if model_path:
             self.init_model(model_path)
-        else:
-            self.download_model()
 
     def init_model(self, model_path):
         self.model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True).eval().to(self.device).half()
@@ -43,7 +44,8 @@ class YO_FLO:
             elapsed_time = time.time() - self.inference_start_time
             if elapsed_time > 0:
                 inferences_per_second = self.inference_count / elapsed_time
-                print(f"Inferences/sec: {inferences_per_second:.2f}")
+                if self.display_inference_speed:
+                    print(f"Inferences/sec: {inferences_per_second:.2f}")
 
     def run_object_detection(self, image):
         task_prompt = '<OD>'
@@ -118,9 +120,10 @@ class YO_FLO:
                             self.beep_sound()
                             self.last_beep_time = time.time()
 
-            cv2.imshow('Object Detection', frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+            if not self.headless:
+                cv2.imshow('Object Detection', frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
 
         cap.release()
         cv2.destroyAllWindows()
@@ -152,6 +155,14 @@ class YO_FLO:
         self.beep_active = not self.beep_active
         print(f"Beep on detection is now {'enabled' if self.beep_active else 'disabled'}")
 
+    def toggle_object_detection(self):
+        self.object_detection_active = not self.object_detection_active
+        print(f"Object detection is now {'enabled' if self.object_detection_active else 'disabled'}")
+
+    def toggle_headless(self):
+        self.headless = not self.headless
+        print(f"Headless mode is now {'enabled' if self.headless else 'disabled'}")
+
 def main():
     parser = argparse.ArgumentParser(description="YO-FLO: A proof-of-concept in using advanced vision models as a YOLO alternative.")
     parser.add_argument("--model_path", type=str, help="Path to the pre-trained model directory")
@@ -161,10 +172,22 @@ def main():
     parser.add_argument("--headless", action='store_true', help="Run in headless mode without displaying video")
     parser.add_argument("--screenshot", action='store_true', help="Enable screenshot on detection")
     parser.add_argument("--beep", action='store_true', help="Enable beep on detection")
+    parser.add_argument("--inference_speed", action='store_true', help="Display inference speed")
+    parser.add_argument("--object_detection", action='store_true', help="Enable object detection")
+    parser.add_argument("--download_model", action='store_true', help="Download model from Hugging Face")
 
     args = parser.parse_args()
 
-    yo_flo = YO_FLO(model_path=args.model_path, debug=args.debug)
+    if not args.model_path and not args.download_model:
+        print("Error: You must specify either --model_path or --download_model.")
+        parser.print_help()
+        return
+
+    if args.download_model:
+        yo_flo = YO_FLO(debug=args.debug, display_inference_speed=args.inference_speed)
+        yo_flo.download_model()
+    else:
+        yo_flo = YO_FLO(model_path=args.model_path, debug=args.debug, display_inference_speed=args.inference_speed)
 
     if args.class_name:
         yo_flo.class_name = args.class_name
@@ -172,7 +195,8 @@ def main():
     if args.phrase:
         yo_flo.phrase = args.phrase
 
-    yo_flo.object_detection_active = True
+    if args.object_detection:
+        yo_flo.toggle_object_detection()
 
     if args.screenshot:
         yo_flo.toggle_screenshot()
@@ -181,14 +205,16 @@ def main():
         yo_flo.toggle_beep()
 
     if args.headless:
-        yo_flo.start_webcam_detection()
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            yo_flo.stop_webcam_detection()
+        yo_flo.toggle_headless()
+
+    yo_flo.start_webcam_detection()
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        yo_flo.stop_webcam_detection()
     else:
-        yo_flo.start_webcam_detection()
         input("Press Enter to stop...")
         yo_flo.stop_webcam_detection()
 
