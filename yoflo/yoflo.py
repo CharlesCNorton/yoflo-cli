@@ -11,7 +11,7 @@ from huggingface_hub import hf_hub_download
 import argparse
 
 class YO_FLO:
-    def __init__(self, model_path=None, debug=False, display_inference_speed=False):
+    def __init__(self, model_path=None, debug=False, display_inference_speed=False, pretty_print=False):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
         self.processor = None
@@ -28,14 +28,18 @@ class YO_FLO:
         self.stop_webcam_flag = threading.Event()
         self.last_beep_time = 0
         self.webcam_thread = None
+        self.pretty_print = pretty_print
 
         if model_path:
             self.init_model(model_path)
 
     def init_model(self, model_path):
-        self.model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True).eval().to(self.device).half()
-        self.processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
-        print("Model loaded successfully in fp16")
+        try:
+            self.model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True).eval().to(self.device).half()
+            self.processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
+            print("Model loaded successfully in fp16")
+        except Exception as e:
+            print(f"Error initializing model: {e}")
 
     def update_inference_rate(self):
         if self.inference_start_time is None:
@@ -48,39 +52,54 @@ class YO_FLO:
                     print(f"Inferences/sec: {inferences_per_second:.2f}")
 
     def run_object_detection(self, image):
-        task_prompt = '<OD>'
-        inputs = self.processor(text=task_prompt, images=image, return_tensors="pt").to(self.device)
-        inputs = {k: v.half() if torch.is_floating_point(v) else v for k, v in inputs.items()}
-        with torch.amp.autocast('cuda'):
-            generated_ids = self.model.generate(input_ids=inputs["input_ids"], pixel_values=inputs.get("pixel_values"), max_new_tokens=1024, early_stopping=False, do_sample=False, num_beams=1)
-        generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
-        parsed_answer = self.processor.post_process_generation(generated_text, task=task_prompt, image_size=image.size)
-        return parsed_answer
+        try:
+            task_prompt = '<OD>'
+            inputs = self.processor(text=task_prompt, images=image, return_tensors="pt").to(self.device)
+            inputs = {k: v.half() if torch.is_floating_point(v) else v for k, v in inputs.items()}
+            with torch.amp.autocast('cuda'):
+                generated_ids = self.model.generate(input_ids=inputs["input_ids"], pixel_values=inputs.get("pixel_values"), max_new_tokens=1024, early_stopping=False, do_sample=False, num_beams=1)
+            generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
+            parsed_answer = self.processor.post_process_generation(generated_text, task=task_prompt, image_size=image.size)
+            return parsed_answer
+        except Exception as e:
+            print(f"Error during object detection: {e}")
+            return None
 
     def run_expression_comprehension(self, image, phrase):
-        task_prompt = '<CAPTION_TO_EXPRESSION_COMPREHENSION>'
-        inputs = self.processor(text=task_prompt, images=image, return_tensors="pt").to(self.device)
-        inputs["input_ids"] = self.processor.tokenizer(phrase, return_tensors="pt").input_ids.to(self.device)
-        inputs = {k: v.half() if torch.is_floating_point(v) else v for k, v in inputs.items()}
-        with torch.amp.autocast('cuda'):
-            generated_ids = self.model.generate(input_ids=inputs["input_ids"], pixel_values=inputs.get("pixel_values"), max_new_tokens=1024, early_stopping=False, do_sample=False, num_beams=1)
-        generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
-        return generated_text
+        try:
+            task_prompt = '<CAPTION_TO_EXPRESSION_COMPREHENSION>'
+            inputs = self.processor(text=task_prompt, images=image, return_tensors="pt").to(self.device)
+            inputs["input_ids"] = self.processor.tokenizer(phrase, return_tensors="pt").input_ids.to(self.device)
+            inputs = {k: v.half() if torch.is_floating_point(v) else v for k, v in inputs.items()}
+            with torch.amp.autocast('cuda'):
+                generated_ids = self.model.generate(input_ids=inputs["input_ids"], pixel_values=inputs.get("pixel_values"), max_new_tokens=1024, early_stopping=False, do_sample=False, num_beams=1)
+            generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
+            return generated_text
+        except Exception as e:
+            print(f"Error during expression comprehension: {e}")
+            return None
 
     def plot_bbox(self, image, detections):
-        for bbox, label in detections:
-            x1, y1, x2, y2 = map(int, bbox)
-            cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-        return image
+        try:
+            for bbox, label in detections:
+                x1, y1, x2, y2 = map(int, bbox)
+                cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            return image
+        except Exception as e:
+            print(f"Error plotting bounding boxes: {e}")
+            return image
 
     def download_model(self):
-        model_name = "microsoft/Florence-2-base-ft"
-        model_path = hf_hub_download(repo_id=model_name, filename="pytorch_model.bin")
-        processor_path = hf_hub_download(repo_id=model_name, filename="preprocessor_config.json")
-        local_model_dir = os.path.dirname(model_path)
-        self.init_model(local_model_dir)
-        print("Model downloaded and initialized")
+        try:
+            model_name = "microsoft/Florence-2-base-ft"
+            model_path = hf_hub_download(repo_id=model_name, filename="pytorch_model.bin")
+            processor_path = hf_hub_download(repo_id=model_name, filename="preprocessor_config.json")
+            local_model_dir = os.path.dirname(model_path)
+            self.init_model(local_model_dir)
+            print("Model downloaded and initialized")
+        except Exception as e:
+            print(f"Error downloading model: {e}")
 
     def start_webcam_detection(self):
         if self.webcam_thread and self.webcam_thread.is_alive():
@@ -109,12 +128,18 @@ class YO_FLO:
                 results = self.run_object_detection(image_pil)
                 if results and '<OD>' in results:
                     detections = [(bbox, label) for bbox, label in zip(results['<OD>']['bboxes'], results['<OD>']['labels'])]
-                    frame = self.plot_bbox(frame, detections)
+                    if self.headless:
+                        if self.pretty_print:
+                            self.pretty_print_detections(detections)
+                        else:
+                            print("Detections:", detections)
+                    else:
+                        frame = self.plot_bbox(frame, detections)
                     self.inference_count += 1
                     self.update_inference_rate()
 
                     if detections:
-                        if self.screenshot_active:
+                        if self.screenshot_active and not self.headless:
                             self.save_screenshot(frame)
                         if self.beep_active and time.time() - self.last_beep_time > 1:
                             self.beep_sound()
@@ -126,7 +151,8 @@ class YO_FLO:
                     break
 
         cap.release()
-        cv2.destroyAllWindows()
+        if not self.headless:
+            cv2.destroyAllWindows()
 
     def stop_webcam_detection(self):
         self.object_detection_active = False
@@ -136,16 +162,22 @@ class YO_FLO:
         print("Webcam detection stopped")
 
     def save_screenshot(self, frame):
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"screenshot_{timestamp}.png"
-        cv2.imwrite(filename, frame)
-        print(f"Screenshot saved: {filename}")
+        try:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"screenshot_{timestamp}.png"
+            cv2.imwrite(filename, frame)
+            print(f"Screenshot saved: {filename}")
+        except Exception as e:
+            print(f"Error saving screenshot: {e}")
 
     def beep_sound(self):
-        if os.name == 'nt':
-            os.system('echo \a')
-        else:
-            print('\a')
+        try:
+            if os.name == 'nt':
+                os.system('echo \a')
+            else:
+                print('\a')
+        except Exception as e:
+            print(f"Error producing beep sound: {e}")
 
     def toggle_screenshot(self):
         self.screenshot_active = not self.screenshot_active
@@ -163,6 +195,13 @@ class YO_FLO:
         self.headless = not self.headless
         print(f"Headless mode is now {'enabled' if self.headless else 'disabled'}")
 
+    def pretty_print_detections(self, detections):
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print("Detections:")
+        for bbox, label in detections:
+            bbox_str = f"[{bbox[0]:.2f}, {bbox[1]:.2f}, {bbox[2]:.2f}, {bbox[3]:.2f}]"
+            print(f"- {label}: {bbox_str} at {timestamp}")
+
 def main():
     parser = argparse.ArgumentParser(description="YO-FLO: A proof-of-concept in using advanced vision models as a YOLO alternative.")
     parser.add_argument("--model_path", type=str, help="Path to the pre-trained model directory")
@@ -175,6 +214,7 @@ def main():
     parser.add_argument("--inference_speed", action='store_true', help="Display inference speed")
     parser.add_argument("--object_detection", action='store_true', help="Enable object detection")
     parser.add_argument("--download_model", action='store_true', help="Download model from Hugging Face")
+    parser.add_argument("--pretty_print", action='store_true', help="Enable pretty print for detections")
 
     args = parser.parse_args()
 
@@ -183,40 +223,44 @@ def main():
         parser.print_help()
         return
 
-    if args.download_model:
-        yo_flo = YO_FLO(debug=args.debug, display_inference_speed=args.inference_speed)
-        yo_flo.download_model()
-    else:
-        yo_flo = YO_FLO(model_path=args.model_path, debug=args.debug, display_inference_speed=args.inference_speed)
-
-    if args.class_name:
-        yo_flo.class_name = args.class_name
-
-    if args.phrase:
-        yo_flo.phrase = args.phrase
-
-    if args.object_detection:
-        yo_flo.toggle_object_detection()
-
-    if args.screenshot:
-        yo_flo.toggle_screenshot()
-
-    if args.beep:
-        yo_flo.toggle_beep()
-
-    if args.headless:
-        yo_flo.toggle_headless()
-
-    yo_flo.start_webcam_detection()
-
     try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        yo_flo.stop_webcam_detection()
-    else:
-        input("Press Enter to stop...")
-        yo_flo.stop_webcam_detection()
+        if args.download_model:
+            yo_flo = YO_FLO(debug=args.debug, display_inference_speed=args.inference_speed, pretty_print=args.pretty_print)
+            yo_flo.download_model()
+        else:
+            yo_flo = YO_FLO(model_path=args.model_path, debug=args.debug, display_inference_speed=args.inference_speed, pretty_print=args.pretty_print)
+
+        if args.class_name:
+            yo_flo.class_name = args.class_name
+
+        if args.phrase:
+            yo_flo.phrase = args.phrase
+
+        yo_flo.headless = args.headless  # Set headless mode based on the argument
+
+        if args.object_detection:
+            yo_flo.toggle_object_detection()
+
+        if args.screenshot:
+            yo_flo.toggle_screenshot()
+
+        if args.beep:
+            yo_flo.toggle_beep()
+
+        if args.object_detection:
+            yo_flo.start_webcam_detection()
+
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            yo_flo.stop_webcam_detection()
+        else:
+            input("Press Enter to stop...")
+            yo_flo.stop_webcam_detection()
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
     main()
