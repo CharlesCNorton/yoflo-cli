@@ -7,11 +7,14 @@ setup(
     include_package_data=True,
     install_requires=[
         'torch',
-        'transformers',
+        'transformers>=4.38.0',
         'Pillow',
         'numpy',
         'opencv-python',
         'huggingface_hub',
+        'datasets',
+        'flash-attn',
+        'scipy'
     ],
     entry_points={
         'console_scripts': [
