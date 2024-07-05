@@ -12,6 +12,7 @@ YOFLO-CLI is a command-line interface for the YO-FLO package, providing advanced
 - **Logging Alerts**: Log detection alerts to a file.
 - **Headless Mode**: Run the tool without displaying the video feed, suitable for server environments.
 - **Pretty Print**: Enable formatted output of detections for better readability.
+- **Model Download**: Option to download the Florence-2 model directly from the Hugging Face Hub.
 
 ## Model Information
 
@@ -19,35 +20,52 @@ This tool uses Microsoft's Florence-2, a powerful vision-language model designed
 
 ## Installation
 
+### From Source
+
 1. Clone the repository:
+    ```sh
     git clone https://github.com/yourusername/yoflo-cli.git
     cd yoflo-cli
+    ```
 
 2. Install the package:
+    ```sh
     pip install .
+    ```
+
+### From PyPI
+
+You can also install YOFLO-CLI directly from PyPI:
+```sh
+pip install yoflo
+```
 
 ## Usage
 
-   python yoflo.py --model_path /path/to/model --class_name "person" --phrase "Is the person smiling?" --debug --screenshot --log_to_file --headless --pretty_print
+Run the script with the desired arguments:
+```sh
+python yoflo.py --model_path /path/to/model --class_name "person" --phrase "Is the person smiling?" --debug --screenshot --log_to_file --headless --pretty_print
+```
 
 ### Command-line Arguments
 
-- `--model_path`: Path to the pre-trained model directory.
-- `--class_name`: Class name to detect (e.g., 'cat', 'dog').
-- `--phrase`: Yes/No question for expression comprehension (e.g., 'Is the person smiling?').
-- `--debug`: Enable debug mode.
-- `--headless`: Run in headless mode without displaying the video feed.
-- `--screenshot`: Enable screenshot on detection.
-- `--log_to_file`: Enable logging alerts to a file.
-- `--inference_speed`: Display inference speed.
-- `--object_detection`: Enable object detection.
-- `--download_model`: Download model from Hugging Face.
-- `--pretty_print`: Enable pretty print for detections.
-- `--alert_on`: Trigger alert on 'yes' or 'no' result (default: 'yes').
+- `-mp`, `--model_path`: Path to the pre-trained model directory.
+- `-cn`, `--class_name`: Class name to detect (e.g., 'cat', 'dog').
+- `-ph`, `--phrase`: Yes/No question for expression comprehension (e.g., 'Is the person smiling?').
+- `-d`, `--debug`: Enable debug mode.
+- `-hl`, `--headless`: Run in headless mode without displaying video.
+- `-ss`, `--screenshot`: Enable screenshot on detection.
+- `-lf`, `--log_to_file`: Enable logging alerts to file.
+- `-is`, `--display_inference_speed`: Display inference speed.
+- `-od`, `--object_detection`: Enable object detection.
+- `-dm`, `--download_model`: Download model from Hugging Face.
+- `-pp`, `--pretty_print`: Enable pretty print for detections.
+- `-ao`, `--alert_on`: Trigger alert on 'yes' or 'no' result for expression comprehension or 'class' for object detection.
+- `-il`, `--inference_limit`: Limit the inference rate to X inferences per second.
 
-## Core Functionality
+## Overview of Capabilities
 
-The core functionality of YOFLO-CLI is encapsulated in the `yoflo.py` script. Here’s a high-level overview of its capabilities:
+YOFLO-CLI provides a comprehensive set of features for real-time object detection and expression comprehension. Here's an overview of its capabilities:
 
 - **Model Initialization**: Loads the Florence-2 model and processor.
 - **Object Detection**: Uses the model to detect objects in images and annotate them with bounding boxes and labels.
@@ -70,7 +88,11 @@ The core functionality of YOFLO-CLI is encapsulated in the `yoflo.py` script. He
 
 ## Development Status
 
-YOFLO-CLI is currently in the process of being converted into a full Python package. We are starting small with just object detection and binary inference based on referring expression comprehension. Future updates will include optimizations and additional features as the project evolves.
+YOFLO-CLI has been successfully converted into a full Python package and is available on PyPI. The package currently supports object detection and binary inference based on referring expression comprehension. Future updates will focus on optimizations and adding new features as the project evolves.
+
+## Contributing
+
+Contributions are welcome! Please fork the repository and submit a pull request with your changes. Make sure to follow the existing code style and add tests for any new features or bug fixes.
 
 ## License
 
@@ -78,5 +100,5 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Acknowledgments
 
-- The Florence-2 model is developed by Microsoft and is available on the HuggingFace Model Hub.
+- The Florence-2 model is developed by Microsoft and is available on the Hugging Face Model Hub.
 - This project uses several open-source libraries, including PyTorch, Transformers, OpenCV, Pillow, and NumPy.
