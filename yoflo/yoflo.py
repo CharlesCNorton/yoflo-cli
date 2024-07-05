@@ -19,7 +19,7 @@ def setup_logging(log_to_file, log_file_path="alerts.log"):
         logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 class YOFLO:
-    def __init__(self, model_path=None, debug=False, display_inference_speed=False,
+    def __init__(self, model_path=None, display_inference_speed=False,
                  pretty_print=False, alert_on="yes", inference_limit=None):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
@@ -28,7 +28,6 @@ class YOFLO:
         self.inference_count = 0
         self.class_name = None
         self.phrase = None
-        self.debug = debug
         self.object_detection_active = False
         self.screenshot_active = False
         self.log_to_file_active = False
@@ -310,7 +309,6 @@ def main():
     parser.add_argument("-mp", "--model_path", type=str, help="Path to the pre-trained model directory")
     parser.add_argument("-cn", "--class_name", type=str, help="Class name to detect (e.g., 'cat', 'dog')")
     parser.add_argument("-ph", "--phrase", type=str, help="Yes/No question for expression comprehension (e.g., 'Is the person smiling?')")
-    parser.add_argument("-d", "--debug", action='store_true', help="Enable debug mode")
     parser.add_argument("-hl", "--headless", action='store_true', help="Run in headless mode without displaying video")
     parser.add_argument("-ss", "--screenshot", action='store_true', help="Enable screenshot on detection")
     parser.add_argument("-lf", "--log_to_file", action='store_true', help="Enable logging alerts to file")
@@ -331,14 +329,14 @@ def main():
 
         if args.download_model:
             yo_flo = YOFLO(
-                debug=args.debug, display_inference_speed=args.display_inference_speed,
+                display_inference_speed=args.display_inference_speed,
                 pretty_print=args.pretty_print, alert_on=args.alert_on,
                 inference_limit=args.inference_limit
             )
             yo_flo.download_model()
         else:
             yo_flo = YOFLO(
-                model_path=args.model_path, debug=args.debug, display_inference_speed=args.display_inference_speed,
+                model_path=args.model_path, display_inference_speed=args.display_inference_speed,
                 pretty_print=args.pretty_print, alert_on=args.alert_on,
                 inference_limit=args.inference_limit
             )
