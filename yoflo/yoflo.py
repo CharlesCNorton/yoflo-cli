@@ -19,15 +19,16 @@ def setup_logging(log_to_file, log_file_path="alerts.log"):
         logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 class YOFLO:
-    def __init__(self, model_path=None, display_inference_speed=False,
-                 pretty_print=False, alert_on="yes", inference_limit=None):
+    def __init__(self, model_path=None, debug=False, display_inference_speed=False,
+                 pretty_print=False, alert_on="yes", inference_limit=None, class_names=None):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
         self.processor = None
         self.inference_start_time = None
         self.inference_count = 0
-        self.class_name = None
+        self.class_names = class_names if class_names else []
         self.phrase = None
+        self.debug = debug
         self.object_detection_active = False
         self.screenshot_active = False
         self.log_to_file_active = False
@@ -67,7 +68,7 @@ class YOFLO:
                 if elapsed_time > 0:
                     inferences_per_second = self.inference_count / elapsed_time
                     if self.display_inference_speed:
-                        logging.info(f"Inferences/sec: {inferences_per_second:.2f}")
+                        logging.info(f"IPS: {inferences_per_second:.2f}")
         except Exception as e:
             logging.error(f"Error updating inference rate: {e}")
 
@@ -94,8 +95,10 @@ class YOFLO:
             logging.error(f"Error during object detection: {e}")
             return None
 
-    def filter_detections(self, detections, class_name):
-        return [(bbox, label) for bbox, label in detections if label.lower() == class_name.lower()]
+    def filter_detections(self, detections):
+        if not self.class_names:
+            return detections
+        return [(bbox, label) for bbox, label in detections if label.lower() in self.class_names]
 
     def run_expression_comprehension(self, image, phrase):
         try:
@@ -182,7 +185,7 @@ class YOFLO:
                                 results['<OD>']['bboxes'], results['<OD>']['labels']
                             )
                         ]
-                        filtered_detections = self.filter_detections(detections, self.class_name)
+                        filtered_detections = self.filter_detections(detections)
                         if self.pretty_print:
                             self.pretty_print_detections(filtered_detections)
                         else:
@@ -254,35 +257,6 @@ class YOFLO:
         except Exception as e:
             logging.error(f"Error logging alert: {e}")
 
-    def toggle_screenshot(self):
-        try:
-            self.screenshot_active = not self.screenshot_active
-            logging.info(f"Screenshot on detection is now {'enabled' if self.screenshot_active else 'disabled'}")
-        except Exception as e:
-            logging.error(f"Error toggling screenshot: {e}")
-
-    def toggle_log_to_file(self):
-        try:
-            self.log_to_file_active = not self.log_to_file_active
-            logging.info(f"Log to file on detection is now {'enabled' if self.log_to_file_active else 'disabled'}")
-            setup_logging(self.log_to_file_active)
-        except Exception as e:
-            logging.error(f"Error toggling log to file: {e}")
-
-    def toggle_object_detection(self):
-        try:
-            self.object_detection_active = not self.object_detection_active
-            logging.info(f"Object detection is now {'enabled' if self.object_detection_active else 'disabled'}")
-        except Exception as e:
-            logging.error(f"Error toggling object detection: {e}")
-
-    def toggle_headless(self):
-        try:
-            self.headless = not self.headless
-            logging.info(f"Headless mode is now {'enabled' if self.headless else 'disabled'}")
-        except Exception as e:
-            logging.error(f"Error toggling headless mode: {e}")
-
     def pretty_print_detections(self, detections):
         try:
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -307,13 +281,13 @@ def main():
         description="YO-FLO: A proof-of-concept in using advanced vision models as a YOLO alternative."
     )
     parser.add_argument("-mp", "--model_path", type=str, help="Path to the pre-trained model directory")
-    parser.add_argument("-cn", "--class_name", type=str, help="Class name to detect (e.g., 'cat', 'dog')")
+    parser.add_argument("-od", "--object_detection", nargs='*', help="Enable object detection with optional class names to detect (e.g., 'cat', 'dog')")
     parser.add_argument("-ph", "--phrase", type=str, help="Yes/No question for expression comprehension (e.g., 'Is the person smiling?')")
+    parser.add_argument("-d", "--debug", action='store_true', help="Enable debug mode")
     parser.add_argument("-hl", "--headless", action='store_true', help="Run in headless mode without displaying video")
     parser.add_argument("-ss", "--screenshot", action='store_true', help="Enable screenshot on detection")
     parser.add_argument("-lf", "--log_to_file", action='store_true', help="Enable logging alerts to file")
     parser.add_argument("-is", "--display_inference_speed", action='store_true', help="Display inference speed")
-    parser.add_argument("-od", "--object_detection", action='store_true', help="Enable object detection")
     parser.add_argument("-dm", "--download_model", action='store_true', help="Download model from Hugging Face")
     parser.add_argument("-pp", "--pretty_print", action='store_true', help="Enable pretty print for detections")
     parser.add_argument("-ao", "--alert_on", type=str, choices=["yes", "no", "class"], default="yes", help="Trigger alert on 'yes' or 'no' result for expression comprehension or 'class' for object detection")
@@ -329,34 +303,25 @@ def main():
 
         if args.download_model:
             yo_flo = YOFLO(
-                display_inference_speed=args.display_inference_speed,
+                debug=args.debug, display_inference_speed=args.display_inference_speed,
                 pretty_print=args.pretty_print, alert_on=args.alert_on,
-                inference_limit=args.inference_limit
+                inference_limit=args.inference_limit, class_names=args.object_detection
             )
             yo_flo.download_model()
         else:
             yo_flo = YOFLO(
-                model_path=args.model_path, display_inference_speed=args.display_inference_speed,
+                model_path=args.model_path, debug=args.debug, display_inference_speed=args.display_inference_speed,
                 pretty_print=args.pretty_print, alert_on=args.alert_on,
-                inference_limit=args.inference_limit
+                inference_limit=args.inference_limit, class_names=args.object_detection
             )
-
-        if args.class_name:
-            yo_flo.class_name = args.class_name
 
         if args.phrase:
             yo_flo.phrase = args.phrase
 
         yo_flo.headless = args.headless
-
-        if args.object_detection:
-            yo_flo.toggle_object_detection()
-
-        if args.screenshot:
-            yo_flo.toggle_screenshot()
-
-        if args.log_to_file:
-            yo_flo.toggle_log_to_file()
+        yo_flo.object_detection_active = args.object_detection is not None
+        yo_flo.screenshot_active = args.screenshot
+        yo_flo.log_to_file_active = args.log_to_file
 
         yo_flo.start_webcam_detection()
 

@@ -4,7 +4,7 @@ YOFLO-CLI is a command-line interface for the YO-FLO package, providing advanced
 
 ## Features
 
-- **Object Detection**: Identify and classify objects within a video feed.
+- **Object Detection**: Identify and classify objects within a video feed. You can specify class names or display all detections if no class names are provided.
 - **Binary Inference**: Answer yes/no questions based on the visual input.
 - **Inference Rate Calculation**: Measure the rate of inferences per second.
 - **Real-time Processing**: Process video feeds from a webcam in real-time.
@@ -24,7 +24,7 @@ This tool uses Microsoft's Florence-2, a powerful vision-language model designed
 
 1. Clone the repository:
     ```sh
-    git clone https://github.com/yourusername/yoflo-cli.git
+    git clone https://github.com/CharlesCNorton/yoflo-cli.git
     cd yoflo-cli
     ```
 
@@ -42,38 +42,66 @@ pip install yoflo
 
 ## Usage
 
-Run the script with the desired arguments:
+Run the script with the desired arguments. Below are some example commands:
+
+### Object Detection for Specific Classes
 ```sh
-python yoflo.py --model_path /path/to/model --class_name "person" --phrase "Is the person smiling?" --debug --screenshot --log_to_file --headless --pretty_print
+python yoflo.py -mp /path/to/model -od cat dog
 ```
 
-### Command-line Arguments
+### Object Detection Displaying All Detections
+```sh
+python yoflo.py -mp /path/to/model -od
+```
 
-- `-mp`, `--model_path`: Path to the pre-trained model directory.
-- `-cn`, `--class_name`: Class name to detect (e.g., 'cat', 'dog').
-- `-ph`, `--phrase`: Yes/No question for expression comprehension (e.g., 'Is the person smiling?').
-- `-d`, `--debug`: Enable debug mode.
-- `-hl`, `--headless`: Run in headless mode without displaying video.
-- `-ss`, `--screenshot`: Enable screenshot on detection.
-- `-lf`, `--log_to_file`: Enable logging alerts to file.
-- `-is`, `--display_inference_speed`: Display inference speed.
-- `-od`, `--object_detection`: Enable object detection.
-- `-dm`, `--download_model`: Download model from Hugging Face.
-- `-pp`, `--pretty_print`: Enable pretty print for detections.
-- `-ao`, `--alert_on`: Trigger alert on 'yes' or 'no' result for expression comprehension or 'class' for object detection.
-- `-il`, `--inference_limit`: Limit the inference rate to X inferences per second.
+### Binary Inference (e.g., "Is the person smiling?")
+```sh
+python yoflo.py -mp /path/to/model -ph "Is the person smiling?"
+```
 
-## Overview of Capabilities
+### Additional Options
 
-YOFLO-CLI provides a comprehensive set of features for real-time object detection and expression comprehension. Here's an overview of its capabilities:
+- **Debug Mode**:
+    ```sh
+    python yoflo.py -mp /path/to/model -od cat dog -d
+    ```
 
-- **Model Initialization**: Loads the Florence-2 model and processor.
-- **Object Detection**: Uses the model to detect objects in images and annotate them with bounding boxes and labels.
-- **Expression Comprehension**: Answers yes/no questions based on the visual content of the image.
-- **Real-time Processing**: Captures video frames from a webcam, processes them for object detection or binary inference, and displays the results.
-- **Screenshot and Logging Alerts**: Captures screenshots and logs alerts to a file upon detection of target objects.
+- **Headless Mode**:
+    ```sh
+    python yoflo.py -mp /path/to/model -od cat dog -hl
+    ```
 
-### Main Functions
+- **Enable Screenshot on Detection**:
+    ```sh
+    python yoflo.py -mp /path/to/model -od cat dog -ss
+    ```
+
+- **Enable Logging Alerts to File**:
+    ```sh
+    python yoflo.py -mp /path/to/model -od cat dog -lf
+    ```
+
+- **Display Inference Speed**:
+    ```sh
+    python yoflo.py -mp /path/to/model -od cat dog -is
+    ```
+
+- **Enable Pretty Print for Detections**:
+    ```sh
+    python yoflo.py -mp /path/to/model -od cat dog -pp
+    ```
+
+- **Limit Inference Rate (e.g., 5 inferences per second)**:
+    ```sh
+    python yoflo.py -mp /path/to/model -od cat dog -il 5
+    ```
+
+- **Alert on Specific Results for Binary Inference**:
+    ```sh
+    python yoflo.py -mp /path/to/model -od cat dog -ao yes
+    ```
+
+## Main Functions
 
 - `init_model()`: Initializes the model and processor from the specified path.
 - `run_object_detection()`: Performs object detection on a given image.
@@ -82,8 +110,6 @@ YOFLO-CLI provides a comprehensive set of features for real-time object detectio
 - `stop_webcam_detection()`: Stops the real-time processing of the webcam feed.
 - `save_screenshot()`: Saves a screenshot when a target object is detected.
 - `log_alert()`: Logs detection alerts to a file.
-- `toggle_screenshot()`: Toggles the screenshot feature on or off.
-- `toggle_log_to_file()`: Toggles the log to file feature on or off.
 - `pretty_print_detections()`: Formats and prints detection results with datetime for readability.
 
 ## Development Status
