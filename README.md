@@ -42,75 +42,107 @@ pip install yoflo
 
 ## Usage
 
-Run the script with the desired arguments. Below are some example commands:
+Run the script with the desired arguments. Below are the available flags and their descriptions:
+
+### Flags
+
+- `-mp`, `--model_path`: Path to the pre-trained model directory. Specify the directory where the Florence-2 model is located. This flag is mandatory if the model is not being downloaded.
+  
+- `-od`, `--object_detection`: Enable object detection. Optionally, you can specify class names to detect (e.g., 'cat', 'dog'). If no class names are provided, all detections will be displayed.
+
+- `-ph`, `--phrase`: Enable binary inference with a yes/no question based on the visual input. For example, "Is the person smiling?". This flag initiates the expression comprehension feature of the tool.
+
+- `-d`, `--debug`: Enable debug mode. This flag provides additional debug information in the logs, which is helpful for troubleshooting and development purposes.
+
+- `-hl`, `--headless`: Run in headless mode without displaying the video feed. This mode is useful for server environments or situations where a display is not available or necessary.
+
+- `-ss`, `--screenshot`: Enable screenshot on detection. When a target object is detected, a screenshot will be automatically captured and saved with a timestamped filename.
+
+- `-lf`, `--log_to_file`: Enable logging alerts to a file. Detection alerts will be logged to a file named `alerts.log`, creating a persistent record of detection events.
+
+- `-is`, `--display_inference_speed`: Display inference speed. This flag logs the rate of inferences per second, providing insight into the performance of the detection process.
+
+- `-dm`, `--download_model`: Download the Florence-2 model from the Hugging Face Hub. This option can be used to download and initialize the model if it is not already available locally.
+
+- `-pp`, `--pretty_print`: Enable pretty print for detections. This flag formats the output of detections for better readability, making it easier to interpret the results.
+
+- `-ao`, `--alert_on`: Trigger alert on specific results. You can specify 'yes' or 'no' for binary inference or 'class' for object detection. Alerts will be triggered based on the specified condition, allowing for customized notifications.
+
+- `-il`, `--inference_limit`: Limit the inference rate to a specified number of inferences per second. This can help manage performance and ensure the system is not overloaded, providing a smoother operation.
+
+## Example Commands
 
 ### Object Detection for Specific Classes
+To perform object detection and only display detections for specific classes such as 'cat' and 'dog':
 ```sh
 python yoflo.py -mp /path/to/model -od cat dog
 ```
 
 ### Object Detection Displaying All Detections
+To perform object detection and display all detected objects without filtering by class:
 ```sh
 python yoflo.py -mp /path/to/model -od
 ```
 
 ### Binary Inference (e.g., "Is the person smiling?")
+To perform binary inference based on a yes/no question related to the visual input:
 ```sh
 python yoflo.py -mp /path/to/model -ph "Is the person smiling?"
 ```
 
-### Additional Options
+### Debug Mode
+To enable debug mode and provide additional debugging information:
+```sh
+python yoflo.py -mp /path/to/model -od cat dog -d
+```
 
-- **Debug Mode**:
-    ```sh
-    python yoflo.py -mp /path/to/model -od cat dog -d
-    ```
+### Headless Mode
+To run the tool in headless mode without displaying the video feed:
+```sh
+python yoflo.py -mp /path/to/model -od cat dog -hl
+```
 
-- **Headless Mode**:
-    ```sh
-    python yoflo.py -mp /path/to/model -od cat dog -hl
-    ```
+### Enable Screenshot on Detection
+To enable screenshot capture whenever a target object is detected:
+```sh
+python yoflo.py -mp /path/to/model -od cat dog -ss
+```
 
-- **Enable Screenshot on Detection**:
-    ```sh
-    python yoflo.py -mp /path/to/model -od cat dog -ss
-    ```
+### Enable Logging Alerts to File
+To log detection alerts to a file named `alerts.log`:
+```sh
+python yoflo.py -mp /path/to/model -od cat dog -lf
+```
 
-- **Enable Logging Alerts to File**:
-    ```sh
-    python yoflo.py -mp /path/to/model -od cat dog -lf
-    ```
+### Display Inference Speed
+To log and display the inference speed (inferences per second):
+```sh
+python yoflo.py -mp /path/to/model -od cat dog -is
+```
 
-- **Display Inference Speed**:
-    ```sh
-    python yoflo.py -mp /path/to/model -od cat dog -is
-    ```
+### Download Model from Hugging Face
+To download the Florence-2 model from the Hugging Face Hub:
+```sh
+python yoflo.py -dm
+```
 
-- **Enable Pretty Print for Detections**:
-    ```sh
-    python yoflo.py -mp /path/to/model -od cat dog -pp
-    ```
+### Pretty Print Detections
+To enable formatted output of detections for better readability:
+```sh
+python yoflo.py -mp /path/to/model -od cat dog -pp
+```
 
-- **Limit Inference Rate (e.g., 5 inferences per second)**:
-    ```sh
-    python yoflo.py -mp /path/to/model -od cat dog -il 5
-    ```
+### Limit Inference Rate
+To limit the inference rate to a specified number of inferences per second, for example, 5 inferences per second:
+```sh
+python yoflo.py -mp /path/to/model -od cat dog -il 5
+```
 
-- **Alert on Specific Results for Binary Inference**:
-    ```sh
-    python yoflo.py -mp /path/to/model -od cat dog -ao yes
-    ```
-
-## Main Functions
-
-- `init_model()`: Initializes the model and processor from the specified path.
-- `run_object_detection()`: Performs object detection on a given image.
-- `run_expression_comprehension()`: Performs binary inference based on a given phrase.
-- `start_webcam_detection()`: Starts real-time processing of webcam feed.
-- `stop_webcam_detection()`: Stops the real-time processing of the webcam feed.
-- `save_screenshot()`: Saves a screenshot when a target object is detected.
-- `log_alert()`: Logs detection alerts to a file.
-- `pretty_print_detections()`: Formats and prints detection results with datetime for readability.
+### Alert on Specific Results for Binary Inference
+To trigger alerts based on specific results for binary inference, for example, triggering on 'yes':
+```sh
+python yoflo.py -mp /path/to/model -od cat dog -ao yes
+```
 
 ## Development Status
 
@@ -122,7 +154,7 @@ Contributions are welcome! Please fork the repository and submit a pull request 
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.
 
 ## Acknowledgments
 
