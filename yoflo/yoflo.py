@@ -38,7 +38,7 @@ class YOFLO:
         self.last_beep_time = 0
         self.webcam_thread = None
         self.pretty_print = pretty_print
-        self.alert_on = alert_on.lower()
+        self.alert_on = alert_on.lower() if alert_on else "yes"
         self.inference_limit = inference_limit
         self.last_inference_time = 0
         self.last_detection = None
@@ -98,7 +98,7 @@ class YOFLO:
     def filter_detections(self, detections):
         if not self.class_names:
             return detections
-        return [(bbox, label) for bbox, label in detections if label.lower() in self.class_names]
+        return [(bbox, label) for bbox, label in detections if label.lower() in [name.lower() for name in self.class_names]]
 
     def run_expression_comprehension(self, image, phrase):
         try:
