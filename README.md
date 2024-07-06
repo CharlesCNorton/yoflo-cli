@@ -52,8 +52,6 @@ Run the script with the desired arguments. Below are the available flags and the
 
 - `-ph`, `--phrase`: Enable binary inference with a yes/no question based on the visual input. For example, "Is the person smiling?". This flag initiates the expression comprehension feature of the tool.
 
-- `-d`, `--debug`: Enable debug mode. This flag provides additional debug information in the logs, which is helpful for troubleshooting and development purposes.
-
 - `-hl`, `--headless`: Run in headless mode without displaying the video feed. This mode is useful for server environments or situations where a display is not available or necessary.
 
 - `-ss`, `--screenshot`: Enable screenshot on detection. When a target object is detected, a screenshot will be automatically captured and saved with a timestamped filename.
@@ -88,12 +86,6 @@ python yoflo.py -mp /path/to/model -od
 To perform binary inference based on a yes/no question related to the visual input:
 ```sh
 python yoflo.py -mp /path/to/model -ph "Is the person smiling?"
-```
-
-### Debug Mode
-To enable debug mode and provide additional debugging information:
-```sh
-python yoflo.py -mp /path/to/model -od cat dog -d
 ```
 
 ### Headless Mode
@@ -154,7 +146,7 @@ Contributions are welcome! Please fork the repository and submit a pull request 
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
