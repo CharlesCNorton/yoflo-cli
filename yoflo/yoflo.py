@@ -273,16 +273,18 @@ class YOFLO:
 def main():
     """Parse command-line arguments and run the YO-FLO application."""
     parser = argparse.ArgumentParser(description="YO-FLO: A proof-of-concept in using advanced vision-language models as a YOLO alternative.")
-    parser.add_argument("-mp", "--model_path", type=str, help="Path to the pre-trained model directory")
     parser.add_argument("-od", "--object_detection", nargs='*', help='Enable object detection with optional class names in quotes to detect (e.g., `"cat"`, `"dog"`)')
     parser.add_argument("-ph", "--phrase", type=str, help="Yes/No question for expression comprehension (e.g., 'Is the person smiling?')")
     parser.add_argument("-hl", "--headless", action='store_true', help="Run in headless mode without displaying video")
     parser.add_argument("-ss", "--screenshot", action='store_true', help="Enable screenshot on detection")
     parser.add_argument("-lf", "--log_to_file", action='store_true', help="Enable logging alerts to file")
     parser.add_argument("-is", "--display_inference_speed", action='store_true', help="Display inference speed")
-    parser.add_argument("-dm", "--download_model", action='store_true', help="Download model from Hugging Face")
     parser.add_argument("-pp", "--pretty_print", action='store_true', help="Enable pretty print for detections")
     parser.add_argument("-il", "--inference_limit", type=float, help="Limit the inference rate to X inferences per second", required=False)
+
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-mp", "--model_path", type=str, help="Path to the pre-trained model directory")
+    group.add_argument("-dm", "--download_model", action='store_true', help="Download model from Hugging Face")
 
     args = parser.parse_args()
     if not args.model_path and not args.download_model:
