@@ -45,6 +45,13 @@ class YOFLO:
 
     def init_model(self, model_path):
         """Initialize the model and processor from the given model path."""
+        if not os.path.exists(model_path):
+            logging.error(f"Model path {model_path} does not exist.")
+            return
+        if not os.path.isdir(model_path):
+            logging.error(f"Model path {model_path} is not a directory.")
+            return
+
         try:
             self.model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True).eval().to(self.device).half()
             self.processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
@@ -128,13 +135,26 @@ class YOFLO:
 
     def download_model(self):
         """Download the model and processor from Hugging Face Hub."""
+        file_urls = {
+            "config.json": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/config.json",
+            "tokenizer.json": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/tokenizer.json",
+            "tokenizer_config.json": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/tokenizer_config.json",
+            "vocab.json": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/vocab.json",
+            "pytorch_model.bin": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/pytorch_model.bin",
+            "processing_florence2.py": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/processing_florence2.py",
+            "preprocessor_config.json": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/preprocessor_config.json",
+            "modeling_florence2.py": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/modeling_florence2.py",
+            "configuration_florence2.py": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/configuration_florence2.py"
+        }
         try:
-            model_name = "microsoft/Florence-2-base-ft"
-            model_path = hf_hub_download(repo_id=model_name, filename="pytorch_model.bin")
-            processor_path = hf_hub_download(repo_id=model_name, filename="preprocessor_config.json")
-            local_model_dir = os.path.dirname(model_path)
+            local_model_dir = "model"
+            os.makedirs(local_model_dir, exist_ok=True)
+            for filename, url in file_urls.items():
+                local_path = os.path.join(local_model_dir, filename)
+                if not os.path.exists(local_path):
+                    hf_hub_download(repo_id="microsoft/Florence-2-base-ft", filename=filename, local_dir=local_model_dir)
             self.init_model(local_model_dir)
-            logging.info("Model downloaded and initialized")
+            logging.info("Model and associated files downloaded and initialized")
         except OSError as e:
             logging.error(f"OS error during model download: {e}")
         except Exception as e:
@@ -296,6 +316,12 @@ def main():
             yo_flo = YOFLO(display_inference_speed=args.display_inference_speed, pretty_print=args.pretty_print, inference_limit=args.inference_limit, class_names=args.object_detection)
             yo_flo.download_model()
         else:
+            if not os.path.exists(args.model_path):
+                logging.error(f"Model path {args.model_path} does not exist.")
+                return
+            if not os.path.isdir(args.model_path):
+                logging.error(f"Model path {args.model_path} is not a directory.")
+                return
             yo_flo = YOFLO(model_path=args.model_path, display_inference_speed=args.display_inference_speed, pretty_print=args.pretty_print, inference_limit=args.inference_limit, class_names=args.object_detection)
 
         if args.phrase:
