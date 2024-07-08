@@ -47,10 +47,10 @@ class YOFLO:
     def init_model(self, model_path):
         """Initialize the model and processor from the given model path."""
         if not os.path.exists(model_path):
-            logging.error(f"Model path {model_path} does not exist.")
+            logging.error(f"Model path {os.path.abspath(model_path)} does not exist.")
             return
         if not os.path.isdir(model_path):
-            logging.error(f"Model path {model_path} is not a directory.")
+            logging.error(f"Model path {os.path.abspath(model_path)} is not a directory.")
             return
 
         try:
@@ -58,11 +58,11 @@ class YOFLO:
             self.model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True).eval().to(self.device).half()
             self.processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
             logging.info(f"Model loaded successfully from {os.path.abspath(model_path)}")
-            logging.info(f"Model loaded from {os.path.abspath(model_path)}")
         except (OSError, ValueError, ModuleNotFoundError) as e:
             logging.error(f"Error initializing model: {e}")
         except Exception as e:
             logging.error(f"Unexpected error initializing model: {e}")
+
 
     def update_inference_rate(self):
         """Calculate and log the inference rate (inferences per second)."""
@@ -89,7 +89,7 @@ class YOFLO:
                 generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
                 parsed_answer = self.processor.post_process_generation(generated_text, task=task_prompt, image_size=image.size)
             return parsed_answer
-        except (torch.cuda.CudaError, torch.nn.ModuleNotFoundError) as e:
+        except (torch.cuda.CudaError, ModuleNotFoundError) as e:
             logging.error(f"CUDA error during object detection: {e}")
         except Exception as e:
             logging.error(f"Error during object detection: {e}")
