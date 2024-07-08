@@ -110,10 +110,6 @@ Imagine you want to determine if a person is working. This might involve checkin
 
 The inference chain feature allows you to evaluate multiple inferences and determine an overall result based on a sequence of phrases. By setting up an inference chain with these phrases, the system can evaluate each condition separately and provide an overall result based on the combined outcomes. This capability leverages the power of YO-FLO process more complex logic than Florence-2 could on its own.
 
-### Importance
-
-Vision-language models like Florence-2 examine each frame in isolation and can only answer simple, specific questions. By using an inference chain, you can string together multiple simple questions to examine more features and derive a more comprehensive understanding of the context. For example, determining if a person
-
 By setting up an inference chain with these phrases, the system can evaluate each condition separately and provide an overall result based on the combined outcomes.
 
 ### How to Use
