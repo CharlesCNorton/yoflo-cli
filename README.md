@@ -1,22 +1,54 @@
+Here's the updated README with detailed explanations of each feature, avoiding direct links to citations:
+
 # YOFLO-CLI
 
 YOFLO-CLI is a command-line interface for the YO-FLO package, providing advanced object detection and binary inference capabilities using the Florence-2 vision-language model in real-time. This tool leverages state-of-the-art vision models to perform tasks such as object detection and binary inference based on referring expression comprehension.
 
 ## Features
 
-- **Object Detection**: Identify and classify objects within a video feed. You can specify class names or display all detections if no class names are provided.
-- **Binary Inference**: Answer yes/no questions based on the visual input.
-- **Inference Rate Calculation**: Measure the rate of inferences per second.
-- **Real-time Processing**: Process video feeds from a webcam in real-time.
-- **Screenshot on Detection**: Automatically capture and save a screenshot when a target object is detected.
-- **Logging Detections**: Log detection events to a file.
-- **Headless Mode**: Run the tool without displaying the video feed, suitable for server environments.
-- **Pretty Print**: Enable formatted output of detections for better readability.
-- **Model Download**: Option to download the Florence-2 model directly from the Hugging Face Hub.
+### Object Detection
+
+Identify and classify objects within a video feed. You can specify class names or display all detections if no class names are provided. Unlike traditional models limited to a fixed set of classes (e.g., COCO dataset), Florence-2 can detect an expansive array of objects due to its advanced vision-language capabilities. While it may be slower than models like YOLO for pure object detection, it excels when natural language processing (NLP) logic is required, allowing it to handle tasks that require understanding and reasoning about the visual input.
+
+### Binary Inference
+
+Answer yes/no questions based on the visual input. This feature leverages Florence-2’s ability to understand complex visual scenes and provide binary responses, making it ideal for simple decision-making tasks. For example, it can answer questions like "Is the person smiling?" by analyzing the visual input in real-time.
+
+### Inference Chain
+
+Evaluate multiple inferences and determine overall results based on a sequence of phrases. This allows for a more comprehensive context analysis within individual frames by examining multiple aspects of the scene. For example, to determine if a person is ready for a video call, you might check if they are wearing glasses, headphones, and smiling. This feature addresses the limitation that vision-language models typically answer simple questions, not compound ones.
+
+### Inference Rate Calculation
+
+Measure the rate of inferences per second. This feature helps monitor the performance of the system and optimize for real-time processing, providing insights into how efficiently the model processes visual data.
+
+### Real-time Processing
+
+Process video feeds from a webcam in real-time. This enables immediate analysis and response to visual input, which is crucial for applications such as surveillance, live monitoring, and interactive systems.
+
+### Screenshot on Detection
+
+Automatically capture and save a screenshot when a target object is detected. This feature is useful for logging and reviewing detections, providing a visual record of the events.
+
+### Logging Detections
+
+Log detection events to a file. This creates a persistent record of detection events, which is useful for auditing, analysis, and troubleshooting. Detection events will be logged to a file named `alerts.log`.
+
+### Headless Mode
+
+Run the tool without displaying the video feed, suitable for server environments or automated systems where a display is not necessary. This mode is useful for running on servers or in background processes.
+
+### Pretty Print
+
+Enable formatted output of detections for better readability. This makes it easier to interpret the results, especially when monitoring the output in real-time.
+
+### Model Download
+
+Option to download the Florence-2 model directly from the Hugging Face Hub. This simplifies the setup process by automating the model download and initialization.
 
 ## Model Information
 
-This tool uses Microsoft's Florence-2, a powerful vision-language model designed to understand and generate detailed descriptions of visual inputs. Florence-2 combines advanced image processing with natural language understanding, making it ideal for complex tasks that require both visual and textual analysis.
+This tool uses Microsoft's Florence-2, a powerful vision-language model designed to understand and generate detailed descriptions of visual inputs. Florence-2 combines advanced image processing with natural language understanding, making it ideal for complex tasks that require both visual and textual analysis. Florence-2 uses a unified sequence-to-sequence architecture to handle tasks from image-level understanding to fine-grained visual-semantic alignment. The model is trained on a large-scale, high-quality multitask dataset FLD-5B, which includes 126M images and billions of text annotations.
 
 ## Installation
 
@@ -47,37 +79,58 @@ Run the script with the desired arguments. Below are the available flags and the
 ### Flags
 
 - `-mp`, `--model_path`: Path to the pre-trained model directory. Specify the directory where the Florence-2 model is located. This flag is mandatory if the model is not being downloaded.
-
 - `-od`, `--object_detection`: Enable object detection. Optionally, you can specify class names to detect (e.g., `"cat"`, `"dog"`). If no class names are provided, all detections will be displayed.
-
 - `-ph`, `--phrase`: Enable binary inference with a yes/no question based on the visual input. For example, "Is the person smiling?". This flag initiates the expression comprehension feature of the tool.
-
 - `-hl`, `--headless`: Run in headless mode without displaying the video feed. This mode is useful for server environments or situations where a display is not available or necessary.
-
 - `-ss`, `--screenshot`: Enable screenshot on detection. When a target object is detected, a screenshot will be automatically captured and saved with a timestamped filename.
-
 - `-lf`, `--log_to_file`: Enable logging of detection events to a file. Detection events will be logged to a file named `alerts.log`, creating a persistent record of detection events.
-
 - `-is`, `--display_inference_speed`: Display inference speed. This flag logs the rate of inferences per second, providing insight into the performance of the detection process.
-
 - `-dm`, `--download_model`: Download the Florence-2 model from the Hugging Face Hub. This option can be used to download and initialize the model if it is not already available locally.
-
 - `-pp`, `--pretty_print`: Enable pretty print for detections. This flag formats the output of detections for better readability, making it easier to interpret the results.
-
 - `-il`, `--inference_limit`: Limit the inference rate to a specified number of inferences per second. This can help manage performance and ensure the system is not overloaded, providing a smoother operation.
+- `-ic`, `--inference_chain`: Enable inference chain with specified phrases. Provide phrases in quotes, separated by spaces (e.g., `"Is it sunny?" "Is it raining?"`).
+
+## Inference Chain Feature
+
+### Overview
+
+The inference chain feature allows you to evaluate multiple inferences and determine an overall result based on a sequence of phrases. This capability leverages the power of the Florence-2 model to handle more complex logic that requires analyzing multiple aspects of the visual input.
+
+### Importance
+
+Vision-language models like Florence-2 examine each frame in isolation and can only answer simple, specific questions. By using an inference chain, you can string together multiple simple questions to examine more features and derive a more comprehensive understanding of the context. For example, asking the model if someone is sleeping isn't reliable just by the state of their eyelids; other context such as their posture or presence of a pillow is necessary.
+
+### Example Use Case
+
+Imagine you want to determine if a person is working. This might involve checking several conditions:
+
+1. Is the person sitting?
+2. Is the person typing?
+3. Is the person awake?
+
+The inference chain feature allows you to evaluate multiple inferences and determine an overall result based on a sequence of phrases. By setting up an inference chain with these phrases, the system can evaluate each condition separately and provide an overall result based on the combined outcomes. This capability leverages the power of YO-FLO process more complex logic than Florence-2 could on its own.
+
+### Importance
+
+Vision-language models like Florence-2 examine each frame in isolation and can only answer simple, specific questions. By using an inference chain, you can string together multiple simple questions to examine more features and derive a more comprehensive understanding of the context. For example, determining if a person
+
+By setting up an inference chain with these phrases, the system can evaluate each condition separately and provide an overall result based on the combined outcomes.
+
+### How to Use
+
+To use the inference chain feature, specify the `--inference_chain` flag followed by the phrases you want to evaluate. Each phrase should be enclosed in quotes and separated by spaces.
+
+#### Command Example:
+```sh
+python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --inference_chain "Is the person wearing glasses?" "Is the person wearing headphones?" "Is the person smiling?" --headless --display_inference_speed
+```
 
 ## Example Commands
 
 ### Object Detection for Specific Classes
-To perform object detection and only display detections for specific classes such as `"cat"` and `"dog"`:
+To perform object detection and only display detections for specific classes such as `"person"`:
 ```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "cat" "dog"
-```
-
-### Object Detection Displaying All Detections
-To perform object detection and display all detected objects without filtering by class:
-```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection
+python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "person"
 ```
 
 ### Binary Inference (e.g., "Is the person smiling?")
@@ -86,28 +139,34 @@ To perform binary inference based on a yes/no question related to the visual inp
 python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --phrase "Is the person smiling?"
 ```
 
+### Inference Chain
+To perform a sequence of inferences and determine overall results:
+```sh
+python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --inference_chain "Is the person wearing glasses?" "Is the person wearing headphones?" "Is the person smiling?" --headless --display_inference_speed
+```
+
 ### Headless Mode
 To run the tool in headless mode without displaying the video feed:
 ```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "cat" "dog" --headless
+python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "person" --headless
 ```
 
 ### Enable Screenshot on Detection
 To enable screenshot capture whenever a target object is detected:
 ```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "cat" "dog" --screenshot
+python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "person" --screenshot
 ```
 
 ### Enable Logging of Detection Events to File
 To log detection events to a file named `alerts.log`:
 ```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "cat" "dog" --log_to_file
+python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "person" --log_to_file
 ```
 
 ### Display Inference Speed
 To log and display the inference speed (inferences per second):
 ```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "cat" "dog" --display_inference_speed
+python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "person" --display_inference_speed
 ```
 
 ### Download Model from Hugging Face
@@ -119,13 +178,13 @@ python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --download_model
 ### Pretty Print Detections
 To enable formatted output of detections for better readability:
 ```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "cat" "dog" --pretty_print
+python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "person" --pretty_print
 ```
 
 ### Limit Inference Rate
 To limit the inference rate to a specified number of inferences per second, for example, 5 inferences per second:
 ```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "cat" "dog" --inference_limit 5
+python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "person" --inference_limit 5
 ```
 
 ## Development Status

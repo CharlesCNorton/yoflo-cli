@@ -40,6 +40,7 @@ class YOFLO:
         self.last_inference_time = 0
         self.last_detection = None
         self.last_detection_count = 0
+        self.inference_phrases = []
         if model_path:
             self.init_model(model_path)
 
@@ -222,6 +223,14 @@ class YOFLO:
                         if clean_result in ['yes', 'no']:
                             if self.log_to_file_active:
                                 self.log_alert(f"Expression Comprehension: {clean_result} at {datetime.now()}")
+                if self.inference_phrases:
+                    inference_result, phrase_results = self.evaluate_inference_chain(image_pil)
+                    logging.info(f"Inference Chain result: {inference_result}, Details: {phrase_results}")
+                    if self.pretty_print:
+                        for idx, result in enumerate(phrase_results):
+                            logging.info(f"Inference {idx + 1}: {'PASS' if result else 'FAIL'}")
+                    self.inference_count += 1
+                    self.update_inference_rate()
                 if not self.headless:
                     cv2.imshow('Object Detection', frame)
                     if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -290,6 +299,33 @@ class YOFLO:
         except Exception as e:
             logging.error(f"Error in pretty_print_expression: {e}")
 
+    def set_inference_phrases(self, phrases):
+        """Set the phrases for the inference chain."""
+        self.inference_phrases = phrases
+        logging.info(f"Inference phrases set: {self.inference_phrases}")
+
+    def evaluate_inference_chain(self, image):
+        """Evaluate the inference chain based on the set phrases."""
+        try:
+            if not self.inference_phrases:
+                logging.error("No inference phrases set.")
+                return "FAIL", []
+
+            results = []
+            for phrase in self.inference_phrases:
+                result = self.run_expression_comprehension(image, phrase)
+                if result:
+                    if "yes" in result.lower():
+                        results.append(True)
+                    else:
+                        results.append(False)
+
+            overall_result = "PASS" if results.count(True) >= 2 else "FAIL"
+            return overall_result, results
+        except Exception as e:
+            logging.error(f"Error evaluating inference chain: {e}")
+            return "FAIL", []
+
 def main():
     """Parse command-line arguments and run the YO-FLO application."""
     parser = argparse.ArgumentParser(description="YO-FLO: A proof-of-concept in using advanced vision-language models as a YOLO alternative.")
@@ -301,6 +337,7 @@ def main():
     parser.add_argument("-is", "--display_inference_speed", action='store_true', help="Display inference speed (inferences per second) in the console output.")
     parser.add_argument("-pp", "--pretty_print", action='store_true', help="Enable pretty print for detections. Formats and prints detection results nicely in the console.")
     parser.add_argument("-il", "--inference_limit", type=float, help="Limit the inference rate to X inferences per second. Useful for controlling the load on the system.", required=False)
+    parser.add_argument("-ic", "--inference_chain", nargs='+', help="Enable inference chain with specified phrases. Provide phrases in quotes, separated by spaces (e.g., 'Is it sunny?' 'Is it raining?').")
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-mp", "--model_path", type=str, help="Path to the pre-trained model directory. Use this if you have a local copy of the model.")
@@ -326,6 +363,8 @@ def main():
 
         if args.phrase:
             yo_flo.phrase = args.phrase
+        if args.inference_chain:
+            yo_flo.set_inference_phrases(args.inference_chain)
         yo_flo.headless = args.headless
         yo_flo.object_detection_active = args.object_detection is not None
         yo_flo.screenshot_active = args.screenshot
