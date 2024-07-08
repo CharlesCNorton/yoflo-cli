@@ -54,10 +54,12 @@ class YOFLO:
             return
 
         try:
+            logging.info(f"Attempting to load model from {os.path.abspath(model_path)}")
             self.model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True).eval().to(self.device).half()
             self.processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
-            logging.info("Model loaded successfully")
-        except (OSError, ValueError, torch.nn.ModuleNotFoundError) as e:
+            logging.info(f"Model loaded successfully from {os.path.abspath(model_path)}")
+            logging.info(f"Model loaded from {os.path.abspath(model_path)}")
+        except (OSError, ValueError, ModuleNotFoundError) as e:
             logging.error(f"Error initializing model: {e}")
         except Exception as e:
             logging.error(f"Unexpected error initializing model: {e}")
@@ -154,8 +156,9 @@ class YOFLO:
                 local_path = os.path.join(local_model_dir, filename)
                 if not os.path.exists(local_path):
                     hf_hub_download(repo_id="microsoft/Florence-2-base-ft", filename=filename, local_dir=local_model_dir)
+                    logging.info(f"Downloaded {filename} to {os.path.abspath(local_path)}")
             self.init_model(local_model_dir)
-            logging.info("Model and associated files downloaded and initialized")
+            logging.info(f"Model and associated files downloaded and initialized at {os.path.abspath(local_model_dir)}")
         except OSError as e:
             logging.error(f"OS error during model download: {e}")
         except Exception as e:

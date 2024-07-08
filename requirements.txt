@@ -1,4 +1,4 @@
-torch
+torch==2.5.0.dev20240617+cu121
 transformers>=4.38.0
 Pillow
 numpy
