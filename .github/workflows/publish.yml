@@ -11,10 +11,7 @@ on:
 jobs:
   publish:
     name: Publish
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ubuntu-latest
 
     steps:
     - name: Check out repository
@@ -29,36 +26,6 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install setuptools wheel build
-
-    - name: Set CUDA_PATH environment variable for Linux
-      if: runner.os == 'Linux'
-      run: |
-        if [ -d "/usr/local/cuda" ]; then
-          echo "CUDA_PATH=/usr/local/cuda" >> $GITHUB_ENV
-        else
-          echo "CUDA not found at /usr/local/cuda. Please set the CUDA_PATH environment variable correctly."
-          exit 1
-        fi
-
-    - name: Set CUDA_PATH environment variable for Windows
-      if: runner.os == 'Windows'
-      run: |
-        if [ -d "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA" ]; then
-          echo "CUDA_PATH=C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA" >> $GITHUB_ENV
-        else
-          echo "CUDA not found at C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA. Please set the CUDA_PATH environment variable correctly."
-          exit 1
-        fi
-
-    - name: Set CUDA_PATH environment variable for macOS
-      if: runner.os == 'macOS'
-      run: |
-        if [ -d "/usr/local/cuda" ]; then
-          echo "CUDA_PATH=/usr/local/cuda" >> $GITHUB_ENV
-        else
-          echo "CUDA not found at /usr/local/cuda. Please set the CUDA_PATH environment variable correctly."
-          exit 1
-        fi
 
     - name: Build package
       run: python -m build
