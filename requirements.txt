@@ -1,5 +1,5 @@
 packages
-torch==2.5.0.dev20240617+cu121
+torch==2.0.0
 transformers>=4.38.0
 Pillow
 numpy
