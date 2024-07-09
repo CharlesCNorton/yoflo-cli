@@ -218,12 +218,10 @@ class YOFLO:
                     results = self.run_expression_comprehension(image_pil, self.phrase)
                     if results:
                         clean_result = results.replace('<s>', '').replace('</s>', '').strip().lower()
-                        logging.info(f"Expression Comprehension: {clean_result}")
-                        if self.pretty_print:
-                            self.pretty_print_expression(clean_result)
+                        self.pretty_print_expression(clean_result)
                         self.inference_count += 1
                         self.update_inference_rate()
-                        if clean_result in ['yes', 'no']:
+                        if clean_result in ['yes', 'no'] and self.log_to_file_active:
                             if self.log_to_file_active:
                                 self.log_alert(f"Expression Comprehension: {clean_result} at {datetime.now()}")
                 if self.inference_phrases:
@@ -298,7 +296,12 @@ class YOFLO:
         """Pretty print the expression comprehension result to the console."""
         try:
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            logging.info(f"Expression Comprehension: {clean_result} at {timestamp}")
+            if self.pretty_print:
+                logging.info("\n" + "="*50)
+                logging.info(f"Expression Comprehension: {clean_result} at {timestamp}")
+                logging.info("="*50 + "\n")
+            else:
+                logging.info(f"Expression Comprehension: {clean_result} at {timestamp}")
         except Exception as e:
             logging.error(f"Error in pretty_print_expression: {e}")
 
