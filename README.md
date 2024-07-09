@@ -1,5 +1,3 @@
-Here's the updated README with detailed explanations of each feature, avoiding direct links to citations:
-
 # YOFLO-CLI
 
 YOFLO-CLI is a command-line interface for the YO-FLO package, providing advanced object detection and binary inference capabilities using the Florence-2 vision-language model in real-time. This tool leverages state-of-the-art vision models to perform tasks such as object detection and binary inference based on referring expression comprehension.
@@ -16,7 +14,7 @@ Answer yes/no questions based on the visual input. This feature leverages Floren
 
 ### Inference Chain
 
-Evaluate multiple inferences and determine overall results based on a sequence of phrases. This allows for a more comprehensive context analysis within individual frames by examining multiple aspects of the scene. For example, to determine if a person is ready for a video call, you might check if they are wearing glasses, headphones, and smiling. This feature addresses the limitation that vision-language models typically answer simple questions, not compound ones.
+Evaluate multiple inferences and determine overall results based on a sequence of phrases. This allows for a more comprehensive context analysis within individual frames by examining multiple aspects of the scene. For example, to determine if a person is working, you might check if their eyes are open, their are hands on the keyboard, and they are facing the computer. This feature addresses the limitation that newer and smaller vision-language models are capable of answering simple questions, but not compound ones.
 
 ### Inference Rate Calculation
 
@@ -108,9 +106,7 @@ Imagine you want to determine if a person is working. This might involve checkin
 2. Is the person typing?
 3. Is the person awake?
 
-The inference chain feature allows you to evaluate multiple inferences and determine an overall result based on a sequence of phrases. By setting up an inference chain with these phrases, the system can evaluate each condition separately and provide an overall result based on the combined outcomes. This capability leverages the power of YO-FLO process more complex logic than Florence-2 could on its own.
-
-By setting up an inference chain with these phrases, the system can evaluate each condition separately and provide an overall result based on the combined outcomes.
+The inference chain feature allows you to evaluate multiple inferences and determine an overall result based on a sequence of phrases. By setting up an inference chain with these phrases, the system can evaluate each condition separately and provide an overall result based on the combined outcomes. This capability leverages the power of YO-FLO to process more complex logic than Florence-2 could on its own.
 
 ### How to Use
 
@@ -118,7 +114,7 @@ To use the inference chain feature, specify the `--inference_chain` flag followe
 
 #### Command Example:
 ```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --inference_chain "Is the person wearing glasses?" "Is the person wearing headphones?" "Is the person smiling?" --headless --display_inference_speed
+python yoflo.py --model_path /path/to/Florence-2-base-ft --inference_chain "Is the person wearing glasses?" "Is the person wearing headphones?" "Is the person smiling?" --headless --display_inference_speed
 ```
 
 ## Example Commands
@@ -126,62 +122,101 @@ python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-web
 ### Object Detection for Specific Classes
 To perform object detection and only display detections for specific classes such as `"person"`:
 ```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "person"
+python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person"
 ```
 
 ### Binary Inference (e.g., "Is the person smiling?")
 To perform binary inference based on a yes/no question related to the visual input:
 ```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --phrase "Is the person smiling?"
+python yoflo.py --model_path /path/to/Florence-2-base-ft --phrase "Is the person smiling?"
 ```
 
 ### Inference Chain
 To perform a sequence of inferences and determine overall results:
 ```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --inference_chain "Is the person wearing glasses?" "Is the person wearing headphones?" "Is the person smiling?" --headless --display_inference_speed
+python yoflo.py --model_path /path/to/Florence-2-base-ft --inference_chain "Is the person wearing glasses?" "Is the person wearing headphones?" "Is the person smiling?" --headless --display_inference_speed
 ```
 
 ### Headless Mode
 To run the tool in headless mode without displaying the video feed:
 ```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "person" --headless
+python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --headless
 ```
 
 ### Enable Screenshot on Detection
 To enable screenshot capture whenever a target object is detected:
 ```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "person" --screenshot
+python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --screenshot
 ```
 
 ### Enable Logging of Detection Events to File
 To log detection events to a file named `alerts.log`:
 ```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "person" --log_to_file
+python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --log_to_file
 ```
 
 ### Display Inference Speed
 To log and display the inference speed (inferences per second):
 ```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "person" --display_inference_speed
+python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection
+
+ "person" --display_inference_speed
 ```
 
 ### Download Model from Hugging Face
 To download the Florence-2 model from the Hugging Face Hub:
 ```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --download_model
+python yoflo.py --download_model
 ```
 
 ### Pretty Print Detections
 To enable formatted output of detections for better readability:
 ```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "person" --pretty_print
+python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --pretty_print
 ```
 
 ### Limit Inference Rate
 To limit the inference rate to a specified number of inferences per second, for example, 5 inferences per second:
 ```sh
-python "D:\GitHub\yoflo-cli\yoflo\yoflo.py" --model_path "D:\text-generation-webui\models\Florence-2-base-ft" --object_detection "person" --inference_limit 5
+python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --inference_limit 5
 ```
+
+## Minimum Requirements for Running YOFLO
+
+1. **Operating System**:
+   - **Ubuntu 22.04** (or compatible Linux distribution)
+   - **Windows 11** (Takes a lot of work, but it can be done!)
+
+2. **Minimum Hardware**:
+   - **CPU**: Intel Core i7
+   - **GPU**:  24 GB VRAM
+   - **RAM**:  32 GB RAM
+   - **Camera**: USB camera connected
+
+3. **Python Version**:
+   - **Python 3.10**
+
+4. **CUDA Version**:
+   - **CUDA 12.1** 
+
+5. **Environment Variables**:
+   - Set the following in your `~/.bashrc` or equivalent:
+     ```bash
+     export CUDA_HOME=/usr/local/cuda
+     export PATH=$CUDA_HOME/bin:$PATH
+     export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+     source ~/.bashrc
+     ```
+
+6. **Required Python Packages**:
+   - `torch`
+   - `transformers>=4.38.0`
+   - `Pillow`
+   - `numpy`
+   - `opencv-python`
+   - `huggingface-hub`
+   - `datasets`
+   - `flash-attn`
 
 ## Development Status
 
