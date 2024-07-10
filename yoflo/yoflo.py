@@ -18,7 +18,7 @@ def setup_logging(log_to_file, log_file_path="alerts.log"):
     logging.basicConfig(level=logging.INFO, format='%(message)s', handlers=handlers)
 
 class YOFLO:
-    def __init__(self, model_path=None, display_inference_speed=False, pretty_print=False, inference_limit=None, class_names=None):
+    def __init__(self, model_path=None, display_inference_speed=False, pretty_print=False, inference_limit=None, class_names=None, webcam_indices=None):
         """Initialize the YO-FLO class with configuration options."""
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
@@ -34,13 +34,14 @@ class YOFLO:
         self.display_inference_speed = display_inference_speed
         self.stop_webcam_flag = threading.Event()
         self.last_beep_time = 0
-        self.webcam_thread = None
+        self.webcam_threads = []
         self.pretty_print = pretty_print
         self.inference_limit = inference_limit
         self.last_inference_time = 0
         self.last_detection = None
         self.last_detection_count = 0
         self.inference_phrases = []
+        self.webcam_indices = webcam_indices if webcam_indices else [0]  # Default to webcam 0 if not specified
         if model_path:
             self.init_model(model_path)
 
@@ -62,7 +63,6 @@ class YOFLO:
             logging.error(f"Error initializing model: {e}")
         except Exception as e:
             logging.error(f"Unexpected error initializing model: {e}")
-
 
     def update_inference_rate(self):
         """Calculate and log the inference rate (inferences per second)."""
@@ -165,28 +165,31 @@ class YOFLO:
             logging.error(f"Error downloading model: {e}")
 
     def start_webcam_detection(self):
-        """Start a separate thread for webcam detection."""
+        """Start separate threads for each specified webcam."""
         try:
-            if self.webcam_thread and self.webcam_thread.is_alive():
+            if self.webcam_threads:
                 logging.warning("Webcam detection is already running.")
                 return
             self.stop_webcam_flag.clear()
-            self.webcam_thread = threading.Thread(target=self._webcam_detection_thread)
-            self.webcam_thread.start()
+            for index in self.webcam_indices:
+                thread = threading.Thread(target=self._webcam_detection_thread, args=(index,))
+                thread.start()
+                self.webcam_threads.append(thread)
         except Exception as e:
             logging.error(f"Error starting webcam detection: {e}")
 
-    def _webcam_detection_thread(self):
-        """Run the webcam detection loop in a separate thread."""
+    def _webcam_detection_thread(self, index):
+        """Run the webcam detection loop in a separate thread for a specific webcam."""
         try:
-            cap = cv2.VideoCapture(0)
+            cap = cv2.VideoCapture(index)
             if not cap.isOpened():
-                logging.error("Error: Could not open webcam.")
+                logging.error(f"Error: Could not open webcam {index}.")
                 return
+            window_name = f'Object Detection Webcam {index}'
             while not self.stop_webcam_flag.is_set():
                 ret, frame = cap.read()
                 if not ret:
-                    logging.error("Error: Failed to capture image from webcam.")
+                    logging.error(f"Error: Failed to capture image from webcam {index}.")
                     break
                 image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 image_pil = Image.fromarray(image)
@@ -204,7 +207,7 @@ class YOFLO:
                         if self.pretty_print:
                             self.pretty_print_detections(filtered_detections)
                         else:
-                            logging.info(f"Detections: {filtered_detections}")
+                            logging.info(f"Detections from webcam {index}: {filtered_detections}")
                         if not self.headless:
                             frame = self.plot_bbox(frame, filtered_detections)
                         self.inference_count += 1
@@ -213,7 +216,7 @@ class YOFLO:
                             if self.screenshot_active:
                                 self.save_screenshot(frame)
                             if self.log_to_file_active:
-                                self.log_alert(f"Detections: {filtered_detections}")
+                                self.log_alert(f"Detections from webcam {index}: {filtered_detections}")
                 elif self.phrase:
                     results = self.run_expression_comprehension(image_pil, self.phrase)
                     if results:
@@ -223,35 +226,36 @@ class YOFLO:
                         self.update_inference_rate()
                         if clean_result in ['yes', 'no'] and self.log_to_file_active:
                             if self.log_to_file_active:
-                                self.log_alert(f"Expression Comprehension: {clean_result} at {datetime.now()}")
+                                self.log_alert(f"Expression Comprehension from webcam {index}: {clean_result} at {datetime.now()}")
                 if self.inference_phrases:
                     inference_result, phrase_results = self.evaluate_inference_chain(image_pil)
-                    logging.info(f"Inference Chain result: {inference_result}, Details: {phrase_results}")
+                    logging.info(f"Inference Chain result from webcam {index}: {inference_result}, Details: {phrase_results}")
                     if self.pretty_print:
                         for idx, result in enumerate(phrase_results):
-                            logging.info(f"Inference {idx + 1}: {'PASS' if result else 'FAIL'}")
+                            logging.info(f"Inference {idx + 1} from webcam {index}: {'PASS' if result else 'FAIL'}")
                     self.inference_count += 1
                     self.update_inference_rate()
                 if not self.headless:
-                    cv2.imshow('Object Detection', frame)
+                    cv2.imshow(window_name, frame)
                     if cv2.waitKey(1) & 0xFF == ord('q'):
                         break
                 self.last_inference_time = current_time
             cap.release()
             if not self.headless:
-                cv2.destroyAllWindows()
+                cv2.destroyWindow(window_name)
         except cv2.error as e:
-            logging.error(f"OpenCV error in webcam detection thread: {e}")
+            logging.error(f"OpenCV error in webcam detection thread {index}: {e}")
         except Exception as e:
-            logging.error(f"Error in webcam detection thread: {e}")
+            logging.error(f"Error in webcam detection thread {index}: {e}")
 
     def stop_webcam_detection(self):
-        """Stop the webcam detection thread."""
+        """Stop all webcam detection threads."""
         try:
             self.object_detection_active = False
             self.stop_webcam_flag.set()
-            if self.webcam_thread:
-                self.webcam_thread.join()
+            for thread in self.webcam_threads:
+                thread.join()
+            self.webcam_threads = []
             logging.info("Webcam detection stopped")
         except Exception as e:
             logging.error(f"Error stopping webcam detection: {e}")
@@ -344,6 +348,7 @@ def main():
     parser.add_argument("-pp", "--pretty_print", action='store_true', help="Enable pretty print for detections. Formats and prints detection results nicely in the console.")
     parser.add_argument("-il", "--inference_limit", type=float, help="Limit the inference rate to X inferences per second. Useful for controlling the load on the system.", required=False)
     parser.add_argument("-ic", "--inference_chain", nargs='+', help="Enable inference chain with specified phrases. Provide phrases in quotes, separated by spaces (e.g., 'Is it sunny?' 'Is it raining?').")
+    parser.add_argument("-wi", "--webcam_indices", nargs='+', type=int, help="Specify the indices of the webcams to use (e.g., 0 1 2).")
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-mp", "--model_path", type=str, help="Path to the pre-trained model directory. Use this if you have a local copy of the model.")
@@ -355,8 +360,9 @@ def main():
 
     try:
         setup_logging(args.log_to_file)
+        webcam_indices = args.webcam_indices if args.webcam_indices else [0]
         if args.download_model:
-            yo_flo = YOFLO(display_inference_speed=args.display_inference_speed, pretty_print=args.pretty_print, inference_limit=args.inference_limit, class_names=args.object_detection)
+            yo_flo = YOFLO(display_inference_speed=args.display_inference_speed, pretty_print=args.pretty_print, inference_limit=args.inference_limit, class_names=args.object_detection, webcam_indices=webcam_indices)
             yo_flo.download_model()
         else:
             if not os.path.exists(args.model_path):
@@ -365,7 +371,7 @@ def main():
             if not os.path.isdir(args.model_path):
                 logging.error(f"Model path {args.model_path} is not a directory.")
                 return
-            yo_flo = YOFLO(model_path=args.model_path, display_inference_speed=args.display_inference_speed, pretty_print=args.pretty_print, inference_limit=args.inference_limit, class_names=args.object_detection)
+            yo_flo = YOFLO(model_path=args.model_path, display_inference_speed=args.display_inference_speed, pretty_print=args.pretty_print, inference_limit=args.inference_limit, class_names=args.object_detection, webcam_indices=webcam_indices)
 
         if args.phrase:
             yo_flo.phrase = args.phrase

@@ -14,7 +14,7 @@ Answer yes/no questions based on the visual input. This feature leverages Floren
 
 ### Inference Chain
 
-Evaluate multiple inferences and determine overall results based on a sequence of phrases. This allows for a more comprehensive context analysis within individual frames by examining multiple aspects of the scene. For example, to determine if a person is working, you might check if their eyes are open, their are hands on the keyboard, and they are facing the computer. This feature addresses the limitation that newer and smaller vision-language models are capable of answering simple questions, but not compound ones.
+Evaluate multiple inferences and determine overall results based on a sequence of phrases. This allows for a more comprehensive context analysis within individual frames by examining multiple aspects of the scene. For example, to determine if a person is working, you might check if their eyes are open, their hands are on the keyboard, and they are facing the computer. This feature addresses the limitation that newer and smaller vision-language models are capable of answering simple questions, but not compound ones.
 
 ### Inference Rate Calculation
 
@@ -43,6 +43,10 @@ Enable formatted output of detections for better readability. This makes it easi
 ### Model Download
 
 Option to download the Florence-2 model directly from the Hugging Face Hub. This simplifies the setup process by automating the model download and initialization.
+
+### Multi-Webcam Support
+
+Support for multiple webcams, allowing concurrent processing and inference on multiple video feeds. This is useful for surveillance systems, multi-view analysis, and other applications requiring inputs from several cameras.
 
 ## Model Information
 
@@ -87,6 +91,7 @@ Run the script with the desired arguments. Below are the available flags and the
 - `-pp`, `--pretty_print`: Enable pretty print for detections. This flag formats the output of detections for better readability, making it easier to interpret the results.
 - `-il`, `--inference_limit`: Limit the inference rate to a specified number of inferences per second. This can help manage performance and ensure the system is not overloaded, providing a smoother operation.
 - `-ic`, `--inference_chain`: Enable inference chain with specified phrases. Provide phrases in quotes, separated by spaces (e.g., `"Is it sunny?" "Is it raining?"`).
+- `-wi`, `--webcam_indices`: Specify the indices of the webcams to use (e.g., `0 1 2`). If not provided, the first webcam (index 0) will be used by default.
 
 ## Inference Chain Feature
 
@@ -143,7 +148,9 @@ To run the tool in headless mode without displaying the video feed:
 python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --headless
 ```
 
-### Enable Screenshot on Detection
+### Enable Screenshot
+
+ on Detection
 To enable screenshot capture whenever a target object is detected:
 ```sh
 python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --screenshot
@@ -158,9 +165,7 @@ python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "per
 ### Display Inference Speed
 To log and display the inference speed (inferences per second):
 ```sh
-python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection
-
- "person" --display_inference_speed
+python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --display_inference_speed
 ```
 
 ### Download Model from Hugging Face
@@ -181,6 +186,12 @@ To limit the inference rate to a specified number of inferences per second, for 
 python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --inference_limit 5
 ```
 
+### Use Multiple Webcams
+To use multiple webcams for object detection or inference:
+```sh
+python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --webcam_indices 0 1 --inference_limit 3
+```
+
 ## Minimum Requirements for Running YOFLO
 
 1. **Operating System**:
@@ -189,7 +200,7 @@ python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "per
 
 2. **Minimum Hardware**:
    - **CPU**: Intel Core i7
-   - **GPU**:  24 GB VRAM
+   - **GPU**:  16 GB VRAM
    - **RAM**:  32 GB RAM
    - **Camera**: USB camera connected
 
@@ -220,7 +231,7 @@ python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "per
 
 ## Development Status
 
-YOFLO-CLI has been successfully converted into a full Python package and is available on PyPI. The package currently supports object detection and binary inference based on referring expression comprehension. Future updates will focus on optimizations and adding new features as the project evolves.
+YOFLO-CLI has been successfully converted into a full Python package and is available on PyPI. The package currently supports object detection, binary inference based on referring expression comprehension, as well as inference trees consisting of multiple phrases. Future updates will focus on optimizations and adding new features as the project evolves.
 
 ## Contributing
 
