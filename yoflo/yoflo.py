@@ -6,19 +6,29 @@ import threading
 import time
 import cv2
 import torch
-from huggingface_hub import hf_hub_download
+from huggingface_hub import snapshot_download
 from PIL import Image
 from transformers import AutoProcessor, AutoModelForCausalLM
+
 
 def setup_logging(log_to_file, log_file_path="alerts.log"):
     """Set up logging to file and/or console."""
     handlers = [logging.StreamHandler()]
     if log_to_file:
         handlers.append(logging.FileHandler(log_file_path))
-    logging.basicConfig(level=logging.INFO, format='%(message)s', handlers=handlers)
+    logging.basicConfig(level=logging.INFO, format="%(message)s", handlers=handlers)
+
 
 class YOFLO:
-    def __init__(self, model_path=None, display_inference_speed=False, pretty_print=False, inference_limit=None, class_names=None, webcam_indices=None):
+    def __init__(
+        self,
+        model_path=None,
+        display_inference_speed=False,
+        pretty_print=False,
+        inference_limit=None,
+        class_names=None,
+        webcam_indices=None,
+    ):
         """Initialize the YO-FLO class with configuration options."""
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
@@ -33,15 +43,12 @@ class YOFLO:
         self.headless = True
         self.display_inference_speed = display_inference_speed
         self.stop_webcam_flag = threading.Event()
-        self.last_beep_time = 0
         self.webcam_threads = []
         self.pretty_print = pretty_print
         self.inference_limit = inference_limit
         self.last_inference_time = 0
-        self.last_detection = None
-        self.last_detection_count = 0
         self.inference_phrases = []
-        self.webcam_indices = webcam_indices if webcam_indices else [0]  # Default to webcam 0 if not specified
+        self.webcam_indices = webcam_indices if webcam_indices else [0]
         if model_path:
             self.init_model(model_path)
 
@@ -51,14 +58,25 @@ class YOFLO:
             logging.error(f"Model path {os.path.abspath(model_path)} does not exist.")
             return
         if not os.path.isdir(model_path):
-            logging.error(f"Model path {os.path.abspath(model_path)} is not a directory.")
+            logging.error(
+                f"Model path {os.path.abspath(model_path)} is not a directory."
+            )
             return
 
         try:
             logging.info(f"Attempting to load model from {os.path.abspath(model_path)}")
-            self.model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True).eval().to(self.device).half()
-            self.processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
-            logging.info(f"Model loaded successfully from {os.path.abspath(model_path)}")
+            self.model = (
+                AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True)
+                .eval()
+                .to(self.device)
+                .half()
+            )
+            self.processor = AutoProcessor.from_pretrained(
+                model_path, trust_remote_code=True
+            )
+            logging.info(
+                f"Model loaded successfully from {os.path.abspath(model_path)}"
+            )
         except (OSError, ValueError, ModuleNotFoundError) as e:
             logging.error(f"Error initializing model: {e}")
         except Exception as e:
@@ -81,13 +99,29 @@ class YOFLO:
     def run_object_detection(self, image):
         """Perform object detection on the given image."""
         try:
-            task_prompt = '<OD>'
-            inputs = self.processor(text=task_prompt, images=image, return_tensors="pt").to(self.device)
-            inputs = {k: v.half() if torch.is_floating_point(v) else v for k, v in inputs.items()}
-            with torch.amp.autocast('cuda'):
-                generated_ids = self.model.generate(input_ids=inputs["input_ids"], pixel_values=inputs.get("pixel_values"), max_new_tokens=1024, early_stopping=False, do_sample=False, num_beams=1)
-                generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
-                parsed_answer = self.processor.post_process_generation(generated_text, task=task_prompt, image_size=image.size)
+            task_prompt = "<OD>"
+            inputs = self.processor(
+                text=task_prompt, images=image, return_tensors="pt"
+            ).to(self.device)
+            inputs = {
+                k: v.half() if torch.is_floating_point(v) else v
+                for k, v in inputs.items()
+            }
+            with torch.amp.autocast("cuda"):
+                generated_ids = self.model.generate(
+                    input_ids=inputs["input_ids"],
+                    pixel_values=inputs.get("pixel_values"),
+                    max_new_tokens=1024,
+                    early_stopping=False,
+                    do_sample=False,
+                    num_beams=1,
+                )
+                generated_text = self.processor.batch_decode(
+                    generated_ids, skip_special_tokens=False
+                )[0]
+                parsed_answer = self.processor.post_process_generation(
+                    generated_text, task=task_prompt, image_size=image.size
+                )
             return parsed_answer
         except (torch.cuda.CudaError, ModuleNotFoundError) as e:
             logging.error(f"CUDA error during object detection: {e}")
@@ -100,7 +134,11 @@ class YOFLO:
         try:
             if not self.class_names:
                 return detections
-            return [(bbox, label) for bbox, label in detections if label.lower() in [name.lower() for name in self.class_names]]
+            return [
+                (bbox, label)
+                for bbox, label in detections
+                if label.lower() in [name.lower() for name in self.class_names]
+            ]
         except Exception as e:
             logging.error(f"Error filtering detections: {e}")
         return detections
@@ -108,13 +146,29 @@ class YOFLO:
     def run_expression_comprehension(self, image, phrase):
         """Run expression comprehension on the given image and phrase."""
         try:
-            task_prompt = '<CAPTION_TO_EXPRESSION_COMPREHENSION>'
-            inputs = self.processor(text=task_prompt, images=image, return_tensors="pt").to(self.device)
-            inputs["input_ids"] = self.processor.tokenizer(phrase, return_tensors="pt").input_ids.to(self.device)
-            inputs = {k: v.half() if torch.is_floating_point(v) else v for k, v in inputs.items()}
-            with torch.amp.autocast('cuda'):
-                generated_ids = self.model.generate(input_ids=inputs["input_ids"], pixel_values=inputs.get("pixel_values"), max_new_tokens=1024, early_stopping=False, do_sample=False, num_beams=1)
-                generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
+            task_prompt = "<CAPTION_TO_EXPRESSION_COMPREHENSION>"
+            inputs = self.processor(
+                text=task_prompt, images=image, return_tensors="pt"
+            ).to(self.device)
+            inputs["input_ids"] = self.processor.tokenizer(
+                phrase, return_tensors="pt"
+            ).input_ids.to(self.device)
+            inputs = {
+                k: v.half() if torch.is_floating_point(v) else v
+                for k, v in inputs.items()
+            }
+            with torch.amp.autocast("cuda"):
+                generated_ids = self.model.generate(
+                    input_ids=inputs["input_ids"],
+                    pixel_values=inputs.get("pixel_values"),
+                    max_new_tokens=1024,
+                    early_stopping=False,
+                    do_sample=False,
+                    num_beams=1,
+                )
+                generated_text = self.processor.batch_decode(
+                    generated_ids, skip_special_tokens=False
+                )[0]
             return generated_text
         except (torch.cuda.CudaError, torch.nn.ModuleNotFoundError) as e:
             logging.error(f"CUDA error during expression comprehension: {e}")
@@ -128,7 +182,15 @@ class YOFLO:
             for bbox, label in detections:
                 x1, y1, x2, y2 = map(int, bbox)
                 cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                cv2.putText(
+                    image,
+                    label,
+                    (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 255, 0),
+                    2,
+                )
             return image
         except cv2.error as e:
             logging.error(f"OpenCV error plotting bounding boxes: {e}")
@@ -138,27 +200,16 @@ class YOFLO:
 
     def download_model(self):
         """Download the model and processor from Hugging Face Hub."""
-        file_urls = {
-            "config.json": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/config.json",
-            "tokenizer.json": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/tokenizer.json",
-            "tokenizer_config.json": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/tokenizer_config.json",
-            "vocab.json": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/vocab.json",
-            "pytorch_model.bin": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/pytorch_model.bin",
-            "processing_florence2.py": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/processing_florence2.py",
-            "preprocessor_config.json": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/preprocessor_config.json",
-            "modeling_florence2.py": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/modeling_florence2.py",
-            "configuration_florence2.py": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/main/configuration_florence2.py"
-        }
         try:
             local_model_dir = "model"
-            os.makedirs(local_model_dir, exist_ok=True)
-            for filename, url in file_urls.items():
-                local_path = os.path.join(local_model_dir, filename)
-                if not os.path.exists(local_path):
-                    hf_hub_download(repo_id="microsoft/Florence-2-base-ft", filename=filename, local_dir=local_model_dir)
-                    logging.info(f"Downloaded {filename} to {os.path.abspath(local_path)}")
+            snapshot_download(
+                repo_id="microsoft/Florence-2-base-ft", local_dir=local_model_dir
+            )
+
+            logging.info(
+                f"Model and associated files downloaded and initialized at {os.path.abspath(local_model_dir)}"
+            )
             self.init_model(local_model_dir)
-            logging.info(f"Model and associated files downloaded and initialized at {os.path.abspath(local_model_dir)}")
         except OSError as e:
             logging.error(f"OS error during model download: {e}")
         except Exception as e:
@@ -172,7 +223,9 @@ class YOFLO:
                 return
             self.stop_webcam_flag.clear()
             for index in self.webcam_indices:
-                thread = threading.Thread(target=self._webcam_detection_thread, args=(index,))
+                thread = threading.Thread(
+                    target=self._webcam_detection_thread, args=(index,)
+                )
                 thread.start()
                 self.webcam_threads.append(thread)
         except Exception as e:
@@ -185,11 +238,13 @@ class YOFLO:
             if not cap.isOpened():
                 logging.error(f"Error: Could not open webcam {index}.")
                 return
-            window_name = f'Object Detection Webcam {index}'
+            window_name = f"Object Detection Webcam {index}"
             while not self.stop_webcam_flag.is_set():
                 ret, frame = cap.read()
                 if not ret:
-                    logging.error(f"Error: Failed to capture image from webcam {index}.")
+                    logging.error(
+                        f"Error: Failed to capture image from webcam {index}."
+                    )
                     break
                 image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 image_pil = Image.fromarray(image)
@@ -201,13 +256,20 @@ class YOFLO:
                     current_time = time.time()
                 if self.object_detection_active:
                     results = self.run_object_detection(image_pil)
-                    if results and '<OD>' in results:
-                        detections = [(bbox, label) for bbox, label in zip(results['<OD>']['bboxes'], results['<OD>']['labels'])]
+                    if results and "<OD>" in results:
+                        detections = [
+                            (bbox, label)
+                            for bbox, label in zip(
+                                results["<OD>"]["bboxes"], results["<OD>"]["labels"]
+                            )
+                        ]
                         filtered_detections = self.filter_detections(detections)
                         if self.pretty_print:
                             self.pretty_print_detections(filtered_detections)
                         else:
-                            logging.info(f"Detections from webcam {index}: {filtered_detections}")
+                            logging.info(
+                                f"Detections from webcam {index}: {filtered_detections}"
+                            )
                         if not self.headless:
                             frame = self.plot_bbox(frame, filtered_detections)
                         self.inference_count += 1
@@ -216,28 +278,43 @@ class YOFLO:
                             if self.screenshot_active:
                                 self.save_screenshot(frame)
                             if self.log_to_file_active:
-                                self.log_alert(f"Detections from webcam {index}: {filtered_detections}")
+                                self.log_alert(
+                                    f"Detections from webcam {index}: {filtered_detections}"
+                                )
                 elif self.phrase:
                     results = self.run_expression_comprehension(image_pil, self.phrase)
                     if results:
-                        clean_result = results.replace('<s>', '').replace('</s>', '').strip().lower()
+                        clean_result = (
+                            results.replace("<s>", "")
+                            .replace("</s>", "")
+                            .strip()
+                            .lower()
+                        )
                         self.pretty_print_expression(clean_result)
                         self.inference_count += 1
                         self.update_inference_rate()
-                        if clean_result in ['yes', 'no'] and self.log_to_file_active:
+                        if clean_result in ["yes", "no"] and self.log_to_file_active:
                             if self.log_to_file_active:
-                                self.log_alert(f"Expression Comprehension from webcam {index}: {clean_result} at {datetime.now()}")
+                                self.log_alert(
+                                    f"Expression Comprehension from webcam {index}: {clean_result} at {datetime.now()}"
+                                )
                 if self.inference_phrases:
-                    inference_result, phrase_results = self.evaluate_inference_chain(image_pil)
-                    logging.info(f"Inference Chain result from webcam {index}: {inference_result}, Details: {phrase_results}")
+                    inference_result, phrase_results = self.evaluate_inference_chain(
+                        image_pil
+                    )
+                    logging.info(
+                        f"Inference Chain result from webcam {index}: {inference_result}, Details: {phrase_results}"
+                    )
                     if self.pretty_print:
                         for idx, result in enumerate(phrase_results):
-                            logging.info(f"Inference {idx + 1} from webcam {index}: {'PASS' if result else 'FAIL'}")
+                            logging.info(
+                                f"Inference {idx + 1} from webcam {index}: {'PASS' if result else 'FAIL'}"
+                            )
                     self.inference_count += 1
                     self.update_inference_rate()
                 if not self.headless:
                     cv2.imshow(window_name, frame)
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                    if cv2.waitKey(1) & 0xFF == ord("q"):
                         break
                 self.last_inference_time = current_time
             cap.release()
@@ -263,7 +340,7 @@ class YOFLO:
     def save_screenshot(self, frame):
         """Save a screenshot of the current frame."""
         try:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"screenshot_{timestamp}.png"
             cv2.imwrite(filename, frame)
             logging.info(f"Screenshot saved: {filename}")
@@ -275,7 +352,7 @@ class YOFLO:
     def log_alert(self, message):
         """Log an alert message to a file."""
         try:
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
             with open("alerts.log", "a") as log_file:
                 log_file.write(f"{timestamp} - {message}\n")
             logging.info(f"{timestamp} - {message}")
@@ -287,23 +364,25 @@ class YOFLO:
     def pretty_print_detections(self, detections):
         """Pretty print the detections to the console."""
         try:
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            logging.info("\n" + "="*50)
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            logging.info("\n" + "=" * 50)
             for bbox, label in detections:
-                bbox_str = f"[{bbox[0]:.2f}, {bbox[1]:.2f}, {bbox[2]:.2f}, {bbox[3]:.2f}]"
+                bbox_str = (
+                    f"[{bbox[0]:.2f}, {bbox[1]:.2f}, {bbox[2]:.2f}, {bbox[3]:.2f}]"
+                )
                 logging.info(f"- {label}: {bbox_str} at {timestamp}")
-            logging.info("="*50 + "\n")
+            logging.info("=" * 50 + "\n")
         except Exception as e:
             logging.error(f"Error in pretty_print_detections: {e}")
 
     def pretty_print_expression(self, clean_result):
         """Pretty print the expression comprehension result to the console."""
         try:
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             if self.pretty_print:
-                logging.info("\n" + "="*50)
+                logging.info("\n" + "=" * 50)
                 logging.info(f"Expression Comprehension: {clean_result} at {timestamp}")
-                logging.info("="*50 + "\n")
+                logging.info("=" * 50 + "\n")
             else:
                 logging.info(f"Expression Comprehension: {clean_result} at {timestamp}")
         except Exception as e:
@@ -336,23 +415,88 @@ class YOFLO:
             logging.error(f"Error evaluating inference chain: {e}")
             return "FAIL", []
 
+
 def main():
     """Parse command-line arguments and run the YO-FLO application."""
-    parser = argparse.ArgumentParser(description="YO-FLO: A proof-of-concept in using advanced vision-language models as a YOLO alternative.")
-    parser.add_argument("-od", "--object_detection", nargs='*', help='Enable object detection with optional class names to detect (e.g., "cat", "dog"). Specify class names in quotes.')
-    parser.add_argument("-ph", "--phrase", type=str, help="Yes/No question for expression comprehension (e.g., 'Is the person smiling?'). This will check the presence of specific expressions in the captured images.")
-    parser.add_argument("-hl", "--headless", action='store_true', help="Run in headless mode without displaying video. Useful for running on servers without a display.")
-    parser.add_argument("-ss", "--screenshot", action='store_true', help="Enable screenshot on detection. Saves an image file when detections are made.")
-    parser.add_argument("-lf", "--log_to_file", action='store_true', help="Enable logging alerts to file. Logs will be saved in 'alerts.log'.")
-    parser.add_argument("-is", "--display_inference_speed", action='store_true', help="Display inference speed (inferences per second) in the console output.")
-    parser.add_argument("-pp", "--pretty_print", action='store_true', help="Enable pretty print for detections. Formats and prints detection results nicely in the console.")
-    parser.add_argument("-il", "--inference_limit", type=float, help="Limit the inference rate to X inferences per second. Useful for controlling the load on the system.", required=False)
-    parser.add_argument("-ic", "--inference_chain", nargs='+', help="Enable inference chain with specified phrases. Provide phrases in quotes, separated by spaces (e.g., 'Is it sunny?' 'Is it raining?').")
-    parser.add_argument("-wi", "--webcam_indices", nargs='+', type=int, help="Specify the indices of the webcams to use (e.g., 0 1 2).")
+    parser = argparse.ArgumentParser(
+        description="YO-FLO: A proof-of-concept in using advanced vision-language models as a YOLO alternative."
+    )
+    parser.add_argument(
+        "-od",
+        "--object_detection",
+        nargs="*",
+        help='Enable object detection with optional class names to detect (e.g., "cat", "dog"). Specify class names in quotes.',
+    )
+    parser.add_argument(
+        "-ph",
+        "--phrase",
+        type=str,
+        help="Yes/No question for expression comprehension (e.g., 'Is the person smiling?'). This will check the presence of specific expressions in the captured images.",
+    )
+    parser.add_argument(
+        "-hl",
+        "--headless",
+        action="store_true",
+        help="Run in headless mode without displaying video. Useful for running on servers without a display.",
+    )
+    parser.add_argument(
+        "-ss",
+        "--screenshot",
+        action="store_true",
+        help="Enable screenshot on detection. Saves an image file when detections are made.",
+    )
+    parser.add_argument(
+        "-lf",
+        "--log_to_file",
+        action="store_true",
+        help="Enable logging alerts to file. Logs will be saved in 'alerts.log'.",
+    )
+    parser.add_argument(
+        "-is",
+        "--display_inference_speed",
+        action="store_true",
+        help="Display inference speed (inferences per second) in the console output.",
+    )
+    parser.add_argument(
+        "-pp",
+        "--pretty_print",
+        action="store_true",
+        help="Enable pretty print for detections. Formats and prints detection results nicely in the console.",
+    )
+    parser.add_argument(
+        "-il",
+        "--inference_limit",
+        type=float,
+        help="Limit the inference rate to X inferences per second. Useful for controlling the load on the system.",
+        required=False,
+    )
+    parser.add_argument(
+        "-ic",
+        "--inference_chain",
+        nargs="+",
+        help="Enable inference chain with specified phrases. Provide phrases in quotes, separated by spaces (e.g., 'Is it sunny?' 'Is it raining?').",
+    )
+    parser.add_argument(
+        "-wi",
+        "--webcam_indices",
+        nargs="+",
+        type=int,
+        help="Specify the indices of the webcams to use (e.g., 0 1 2).",
+    )
 
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("-mp", "--model_path", type=str, help="Path to the pre-trained model directory. Use this if you have a local copy of the model.")
-    group.add_argument("-dm", "--download_model", action='store_true', help="Download model from Hugging Face. Use this if you want to download the model files automatically.")
+    group.add_argument(
+        "-mp",
+        "--model_path",
+        type=str,
+        help="Path to the pre-trained model directory. Use this if you have a local copy of the model.",
+    )
+    group.add_argument(
+        "-dm",
+        "--download_model",
+        action="store_true",
+        help="Download model from Hugging Face. Use this if you want to download the model files automatically.",
+    )
 
     args = parser.parse_args()
     if not args.model_path and not args.download_model:
@@ -362,7 +506,13 @@ def main():
         setup_logging(args.log_to_file)
         webcam_indices = args.webcam_indices if args.webcam_indices else [0]
         if args.download_model:
-            yo_flo = YOFLO(display_inference_speed=args.display_inference_speed, pretty_print=args.pretty_print, inference_limit=args.inference_limit, class_names=args.object_detection, webcam_indices=webcam_indices)
+            yo_flo = YOFLO(
+                display_inference_speed=args.display_inference_speed,
+                pretty_print=args.pretty_print,
+                inference_limit=args.inference_limit,
+                class_names=args.object_detection,
+                webcam_indices=webcam_indices,
+            )
             yo_flo.download_model()
         else:
             if not os.path.exists(args.model_path):
@@ -371,7 +521,14 @@ def main():
             if not os.path.isdir(args.model_path):
                 logging.error(f"Model path {args.model_path} is not a directory.")
                 return
-            yo_flo = YOFLO(model_path=args.model_path, display_inference_speed=args.display_inference_speed, pretty_print=args.pretty_print, inference_limit=args.inference_limit, class_names=args.object_detection, webcam_indices=webcam_indices)
+            yo_flo = YOFLO(
+                model_path=args.model_path,
+                display_inference_speed=args.display_inference_speed,
+                pretty_print=args.pretty_print,
+                inference_limit=args.inference_limit,
+                class_names=args.object_detection,
+                webcam_indices=webcam_indices,
+            )
 
         if args.phrase:
             yo_flo.phrase = args.phrase
@@ -395,6 +552,7 @@ def main():
     else:
         input("Press Enter to stop...")
         yo_flo.stop_webcam_detection()
+
 
 if __name__ == "__main__":
     main()
