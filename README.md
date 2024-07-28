@@ -34,7 +34,7 @@ Log detection events to a file. This creates a persistent record of detection ev
 
 ### Headless Mode
 
-Run the tool without displaying the video feed, suitable for server environments or automated systems where a display is not necessary. This mode is useful for running on servers or in background processes.
+Run the tool without displaying the video feed, suitable for server environments or automated systems where a display is not necessary. This mode is useful for running on servers or in background processes. Enabling this mode should result in an ~20% increase in inference speed.
 
 ### Pretty Print
 
@@ -47,6 +47,10 @@ Option to download the Florence-2 model directly from the Hugging Face Hub. This
 ### Multi-Webcam Support
 
 Support for multiple webcams, allowing concurrent processing and inference on multiple video feeds. This is useful for surveillance systems, multi-view analysis, and other applications requiring inputs from several cameras.
+
+### Video Recording
+
+Added video recording functionality with conditions to trigger recording based on object detection and inference results. This feature allows capturing video segments of interest for further analysis or documentation.
 
 ## Model Information
 
@@ -92,6 +96,8 @@ Run the script with the desired arguments. Below are the available flags and the
 - `-il`, `--inference_limit`: Limit the inference rate to a specified number of inferences per second. This can help manage performance and ensure the system is not overloaded, providing a smoother operation.
 - `-ic`, `--inference_chain`: Enable inference chain with specified phrases. Provide phrases in quotes, separated by spaces (e.g., `"Is it sunny?" "Is it raining?"`).
 - `-wi`, `--webcam_indices`: Specify the indices of the webcams to use (e.g., `0 1 2`). If not provided, the first webcam (index 0) will be used by default.
+- `-rtsp`, `--rtsp_urls`: Specify the RTSP URLs for the video streams.
+- `-r`, `--record`: Enable video recording and specify the recording mode: 'od' to start/stop based on object detection, 'infy' to start on 'yes' inference and stop on 'no', and 'infn' to start on 'no' inference and stop on 'yes'.
 
 ## Inference Chain Feature
 
@@ -139,7 +145,9 @@ python yoflo.py --model_path /path/to/Florence-2-base-ft --phrase "Is the person
 ### Inference Chain
 To perform a sequence of inferences and determine overall results:
 ```sh
-python yoflo.py --model_path /path/to/Florence-2-base-ft --inference_chain "Is the person wearing glasses?" "Is the person wearing headphones?" "Is the person smiling?" --headless --display_inference_speed
+python yoflo.py --model_path /path/to/Florence-2-base-ft --inference_chain "Is the person wearing glasses?" "Is the
+
+ person wearing headphones?" "Is the person smiling?" --headless --display_inference_speed
 ```
 
 ### Headless Mode
@@ -148,9 +156,7 @@ To run the tool in headless mode without displaying the video feed:
 python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --headless
 ```
 
-### Enable Screenshot
-
- on Detection
+### Enable Screenshot on Detection
 To enable screenshot capture whenever a target object is detected:
 ```sh
 python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --screenshot
@@ -190,6 +196,12 @@ python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "per
 To use multiple webcams for object detection or inference:
 ```sh
 python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --webcam_indices 0 1 --inference_limit 3
+```
+
+### Video Recording
+To enable video recording based on object detection or inference results:
+```sh
+python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --record od
 ```
 
 ## Minimum Requirements for Running YOFLO
