@@ -260,15 +260,26 @@ class YOFLO:
             snapshot_download(
                 repo_id="microsoft/Florence-2-base-ft", local_dir=local_model_dir
             )
-
+            if not os.path.exists(local_model_dir):
+                logging.error(
+                    f"Model download failed, directory {os.path.abspath(local_model_dir)} does not exist."
+                )
+                return False
+            if not os.path.isdir(local_model_dir):
+                logging.error(
+                    f"Model download failed, path {os.path.abspath(local_model_dir)} is not a directory."
+                )
+                return False
             logging.info(
                 f"Model and associated files downloaded and initialized at {os.path.abspath(local_model_dir)}"
             )
             self.init_model(local_model_dir)
+            return True
         except OSError as e:
             logging.error(f"OS error during model download: {e}")
         except Exception as e:
             logging.error(f"Error downloading model: {e}")
+        return False
 
     def start_webcam_detection(self):
         """Start separate threads for each specified webcam or RTSP stream."""
@@ -684,7 +695,8 @@ def main():
                 rtsp_urls=rtsp_urls,
                 record=args.record
             )
-            yo_flo.download_model()
+            if not yo_flo.download_model():
+                return
         else:
             if not os.path.exists(args.model_path):
                 logging.error(f"Model path {args.model_path} does not exist.")
