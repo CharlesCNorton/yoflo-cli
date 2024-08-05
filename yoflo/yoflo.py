@@ -9,6 +9,7 @@ import torch
 from huggingface_hub import snapshot_download
 from PIL import Image
 from transformers import AutoProcessor, AutoModelForCausalLM
+from transformers import BitsAndBytesConfig
 
 def setup_logging(log_to_file, log_file_path="alerts.log"):
     """Set up logging to file and/or console.
@@ -32,7 +33,8 @@ class YOFLO:
         class_names=None,
         webcam_indices=None,
         rtsp_urls=None,
-        record=None
+        record=None,
+        quantization=None
     ):
         """Initialize the YO-FLO class with configuration options.
 
@@ -45,6 +47,7 @@ class YOFLO:
             webcam_indices (list, optional): Indices of the webcams to use. Defaults to None.
             rtsp_urls (list, optional): RTSP URLs for the video streams. Defaults to None.
             record (str, optional): Mode for video recording. Defaults to None.
+            quantization (str, optional): Quantization mode ("8bit" or "4bit"). Defaults to None.
         """
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
@@ -70,6 +73,7 @@ class YOFLO:
         self.recording = False
         self.video_writer = None
         self.video_out_path = "output.avi"
+        self.quantization = quantization
         if model_path:
             self.init_model(model_path)
 
@@ -89,12 +93,25 @@ class YOFLO:
             return
         try:
             logging.info(f"Attempting to load model from {os.path.abspath(model_path)}")
-            self.model = (
-                AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True)
-                .eval()
-                .to(self.device)
-                .half()
-            )
+
+            quantization_config = None
+            if self.quantization == "4bit":
+                quantization_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_compute_dtype=torch.bfloat16,
+                    bnb_4bit_use_double_quant=True
+                )
+                logging.info("Using 4-bit quantization.")
+
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_path,
+                trust_remote_code=True,
+                quantization_config=quantization_config
+            ).eval()
+
+            if not self.quantization:
+                self.model.to(self.device)
+
             self.processor = AutoProcessor.from_pretrained(
                 model_path, trust_remote_code=True
             )
@@ -133,15 +150,19 @@ class YOFLO:
             task_prompt = "<OD>"
             inputs = self.processor(
                 text=task_prompt, images=image, return_tensors="pt"
-            ).to(self.device)
-            inputs = {
-                k: v.half() if torch.is_floating_point(v) else v
-                for k, v in inputs.items()
-            }
-            with torch.amp.autocast("cuda"):
+            )
+
+            if not self.quantization:
+                inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+            if self.quantization:
+                dtype = next(self.model.parameters()).dtype
+                inputs = {k: v.to(self.model.device, dtype=dtype) if torch.is_floating_point(v) else v for k, v in inputs.items()}
+
+            with torch.no_grad():
                 generated_ids = self.model.generate(
-                    input_ids=inputs["input_ids"],
-                    pixel_values=inputs.get("pixel_values"),
+                    input_ids=inputs["input_ids"].to(self.model.device),
+                    pixel_values=inputs.get("pixel_values").to(self.model.device),
                     max_new_tokens=1024,
                     early_stopping=False,
                     do_sample=False,
@@ -196,18 +217,22 @@ class YOFLO:
             task_prompt = "<CAPTION_TO_EXPRESSION_COMPREHENSION>"
             inputs = self.processor(
                 text=task_prompt, images=image, return_tensors="pt"
-            ).to(self.device)
+            )
             inputs["input_ids"] = self.processor.tokenizer(
                 phrase, return_tensors="pt"
-            ).input_ids.to(self.device)
-            inputs = {
-                k: v.half() if torch.is_floating_point(v) else v
-                for k, v in inputs.items()
-            }
-            with torch.amp.autocast("cuda"):
+            ).input_ids
+
+            if not self.quantization:
+                inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+            if self.quantization:
+                dtype = next(self.model.parameters()).dtype
+                inputs = {k: v.to(dtype=dtype) if torch.is_floating_point(v) else v for k, v in inputs.items()}
+
+            with torch.no_grad():
                 generated_ids = self.model.generate(
-                    input_ids=inputs["input_ids"],
-                    pixel_values=inputs.get("pixel_values"),
+                    input_ids=inputs["input_ids"].to(self.model.device),
+                    pixel_values=inputs.get("pixel_values").to(self.model.device),
                     max_new_tokens=1024,
                     early_stopping=False,
                     do_sample=False,
@@ -217,7 +242,7 @@ class YOFLO:
                     generated_ids, skip_special_tokens=False
                 )[0]
             return generated_text
-        except (torch.cuda.CudaError, torch.nn.ModuleNotFoundError) as e:
+        except (torch.cuda.CudaError, ModuleNotFoundError) as e:
             logging.error(f"CUDA error during expression comprehension: {e}")
         except Exception as e:
             logging.error(f"Error during expression comprehension: {e}")
@@ -414,6 +439,8 @@ class YOFLO:
                 self.stop_recording()
         except cv2.error as e:
             logging.error(f"OpenCV error in detection thread {source}: {e}")
+        except ModuleNotFoundError as e:
+            logging.error(f"ModuleNotFoundError in detection thread {source}: {e}")
         except Exception as e:
             logging.error(f"Error in detection thread {source}: {e}")
 
@@ -664,6 +691,13 @@ def main():
         help="Enable video recording and specify the recording mode: 'od' to start/stop based on object detection, 'infy' to start on 'yes' inference and stop on 'no', and 'infn' to start on 'no' inference and stop on 'yes'.",
     )
 
+    parser.add_argument(
+        "-4bit",
+        "--four_bit",
+        action="store_true",
+        help="Enable 4-bit quantization for model loading.",
+    )
+
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
         "-mp",
@@ -681,6 +715,9 @@ def main():
     args = parser.parse_args()
     if not args.model_path and not args.download_model:
         parser.error("You must specify either --model_path or --download_model.")
+
+    quantization_mode = "4bit" if args.four_bit else None
+
     try:
         setup_logging(args.log_to_file)
         webcam_indices = args.webcam_indices if args.webcam_indices else [0]
@@ -693,7 +730,8 @@ def main():
                 class_names=args.object_detection,
                 webcam_indices=webcam_indices,
                 rtsp_urls=rtsp_urls,
-                record=args.record
+                record=args.record,
+                quantization=quantization_mode
             )
             if not yo_flo.download_model():
                 return
@@ -712,7 +750,8 @@ def main():
                 class_names=args.object_detection,
                 webcam_indices=webcam_indices,
                 rtsp_urls=rtsp_urls,
-                record=args.record
+                record=args.record,
+                quantization=quantization_mode
             )
         if args.phrase:
             yo_flo.phrase = args.phrase
