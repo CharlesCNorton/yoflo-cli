@@ -32,7 +32,7 @@ class YOFLO:
     def __init__(
         self,
         model_path=None,
-        display_inference_speed=False,
+        display_inference_rate=False,
         pretty_print=False,
         inference_limit=None,
         class_names=None,
@@ -48,7 +48,7 @@ class YOFLO:
 
         Args:
             model_path (str, optional): Path to the pre-trained model directory. Defaults to None.
-            display_inference_speed (bool, optional): Whether to display inference speed. Defaults to False.
+            display_inference_rate (bool, optional): Whether to display inference rate. Defaults to False.
             pretty_print (bool, optional): Whether to pretty print detections. Defaults to False.
             inference_limit (float, optional): Limit the inference rate to X inferences per second. Defaults to None.
             class_names (list, optional): List of class names to detect. Defaults to None.
@@ -68,7 +68,7 @@ class YOFLO:
         self.screenshot_active = False
         self.log_to_file_active = False
         self.headless = True
-        self.display_inference_speed = display_inference_speed
+        self.display_inference_rate = display_inference_rate
         self.stop_webcam_flag = threading.Event()
         self.webcam_threads = []
         self.pretty_print = pretty_print
@@ -82,6 +82,7 @@ class YOFLO:
         self.video_writer = None
         self.quantization = quantization
         self.video_out_path = f"output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.avi"
+        self.last_detection_time = time.time()  # Timer for detecting class loss
         if model_path:
             self.init_model(model_path)
 
@@ -120,9 +121,7 @@ class YOFLO:
             ).eval()
 
             if not self.quantization:
-
                 self.model.to(self.device)
-
                 if torch.cuda.is_available():
                     self.model = self.model.half()
                     logging.info("Using FP16 precision for the model.")
@@ -150,7 +149,7 @@ class YOFLO:
                 elapsed_time = time.time() - self.inference_start_time
                 if elapsed_time > 0:
                     inferences_per_second = self.inference_count / elapsed_time
-                    if self.display_inference_speed:
+                    if self.display_inference_rate:
                         logging.info(f"IPS: {inferences_per_second:.2f}")
         except Exception as e:
             logging.error(f"Error updating inference rate: {e}")
@@ -244,7 +243,6 @@ class YOFLO:
                 phrase, return_tensors="pt"
             ).input_ids
 
-            # Determine the appropriate dtype
             dtype = next(self.model.parameters()).dtype
             inputs = {
                 k: v.to(self.device, dtype=dtype) if torch.is_floating_point(v) else v
@@ -338,6 +336,31 @@ class YOFLO:
             logging.error(f"Error downloading model: {e}")
         return False
 
+    def handle_recording_by_detection(self, detections, frame):
+        """
+        Handle recording based on object detection results.
+
+        This method controls video recording based on the presence of detections,
+        starting or stopping recording as needed. If no detections are found for longer than 1 second,
+        recording will stop. Recording only occurs if the 'record' flag is set.
+
+        Args:
+            detections (list): List of detections from the object detection process.
+            frame (numpy.ndarray): The frame to use for recording.
+        """
+        try:
+            if self.record:  # Check if recording is enabled
+                current_time = time.time()
+                if detections:
+                    self.start_recording(frame)
+                    self.last_detection_time = current_time
+                else:
+                    if (current_time - self.last_detection_time) > 1:
+                        self.stop_recording()
+                        logging.info("Recording stopped due to loss of detection for more than 1 second.")
+        except Exception as e:
+            logging.error(f"Error handling recording by detection: {e}")
+
     def start_webcam_detection(self):
         """
         Start separate threads for each specified webcam or RTSP stream.
@@ -387,9 +410,8 @@ class YOFLO:
             while not self.stop_webcam_flag.is_set():
                 ret, frame = cap.read()
                 if not ret:
-                    logging.error(
-                        f"Error: Failed to capture image from source {source}."
-                    )
+                    logging.error(f"Error: Failed to capture image from source {source}.")
+                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Error: Failed to capture image from source {source}.")
                     break
                 image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 image_pil = Image.fromarray(image)
@@ -412,9 +434,8 @@ class YOFLO:
                         if self.pretty_print:
                             self.pretty_print_detections(filtered_detections)
                         else:
-                            logging.info(
-                                f"Detections from source {source}: {filtered_detections}"
-                            )
+                            logging.info(f"Detections from source {source}: {filtered_detections}")
+                            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Detections from source {source}: {filtered_detections}")
                         if not self.headless:
                             frame = self.plot_bbox(frame, filtered_detections)
                         self.inference_count += 1
@@ -423,14 +444,11 @@ class YOFLO:
                             if self.screenshot_active:
                                 self.save_screenshot(frame)
                             if self.log_to_file_active:
-                                self.log_alert(
-                                    f"Detections from source {source}: {filtered_detections}"
-                                )
-                            if self.record:
-                                self.start_recording(frame)
-                        else:
-                            if self.record and self.record == "od":
-                                self.stop_recording()
+                                self.log_alert(f"Detections from source {source}: {filtered_detections}")
+                        self.handle_recording_by_detection(filtered_detections, frame)
+                    else:
+                        logging.error(f"Unexpected result structure from object detection on source {source}: {results}")
+                        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unexpected result structure from object detection on source {source}: {results}")
                 elif self.phrase:
                     results = self.run_expression_comprehension(image_pil, self.phrase)
                     if results:
@@ -445,23 +463,17 @@ class YOFLO:
                         self.update_inference_rate()
                         if clean_result in ["yes", "no"]:
                             if self.log_to_file_active:
-                                self.log_alert(
-                                    f"Expression Comprehension from source {source}: {clean_result} at {datetime.now()}"
-                                )
+                                self.log_alert(f"Expression Comprehension from source {source}: {clean_result} at {datetime.now()}")
                             if self.record:
                                 self.handle_recording_by_inference(clean_result, frame)
                 if self.inference_phrases:
-                    inference_result, phrase_results = self.evaluate_inference_chain(
-                        image_pil
-                    )
-                    logging.info(
-                        f"Inference Chain result from source {source}: {inference_result}, Details: {phrase_results}"
-                    )
+                    inference_result, phrase_results = self.evaluate_inference_chain(image_pil)
+                    logging.info(f"Inference Chain result from source {source}: {inference_result}, Details: {phrase_results}")
+                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inference Chain result from source {source}: {inference_result}, Details: {phrase_results}")
                     if self.pretty_print:
                         for idx, result in enumerate(phrase_results):
-                            logging.info(
-                                f"Inference {idx + 1} from source {source}: {'PASS' if result else 'FAIL'}"
-                            )
+                            logging.info(f"Inference {idx + 1} from source {source}: {'PASS' if result else 'FAIL'}")
+                            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inference {idx + 1} from source {source}: {'PASS' if result else 'FAIL'}")
                     self.inference_count += 1
                     self.update_inference_rate()
                 if not self.headless:
@@ -478,10 +490,14 @@ class YOFLO:
                 self.stop_recording()
         except cv2.error as e:
             logging.error(f"OpenCV error in detection thread {source}: {e}")
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] OpenCV error in detection thread {source}: {e}")
         except ModuleNotFoundError as e:
             logging.error(f"ModuleNotFoundError in detection thread {source}: {e}")
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ModuleNotFoundError in detection thread {source}: {e}")
         except Exception as e:
             logging.error(f"Error in detection thread {source}: {e}")
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Error in detection thread {source}: {e}")
+
 
     def stop_webcam_detection(self):
         """
@@ -515,10 +531,13 @@ class YOFLO:
             filename = f"screenshot_{timestamp}.png"
             cv2.imwrite(filename, frame)
             logging.info(f"Screenshot saved: {filename}")
+            print(f"[{timestamp}] Screenshot saved: {filename}")
         except cv2.error as e:
             logging.error(f"OpenCV error saving screenshot: {e}")
+            print(f"[{datetime.now().strftime('%Y%m%d_%H%M%S')}] Error saving screenshot: {e}")
         except Exception as e:
             logging.error(f"Error saving screenshot: {e}")
+            print(f"[{datetime.now().strftime('%Y%m%d_%H%M%S')}] Error saving screenshot: {e}")
 
     def log_alert(self, message):
         """
@@ -534,10 +553,13 @@ class YOFLO:
             with open("alerts.log", "a") as log_file:
                 log_file.write(f"{timestamp} - {message}\n")
             logging.info(f"{timestamp} - {message}")
+            print(f"[{timestamp}] Log entry written: {message}")
         except IOError as e:
             logging.error(f"IO error logging alert: {e}")
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')}] IO error logging alert: {e}")
         except Exception as e:
             logging.error(f"Error logging alert: {e}")
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')}] Error logging alert: {e}")
 
     def pretty_print_detections(self, detections):
         """
@@ -632,7 +654,7 @@ class YOFLO:
             frame (numpy.ndarray): The frame to use for setting the video writer.
         """
         try:
-            if not self.recording:
+            if not self.recording and self.record:
                 height, width, _ = frame.shape
                 self.video_writer = cv2.VideoWriter(
                     self.video_out_path,
@@ -693,83 +715,70 @@ def main():
     )
     parser.add_argument(
         "-od",
-        "--object_detection",
         nargs="*",
         help='Enable object detection with optional class names to detect (e.g., "cat", "dog"). Specify class names in quotes.',
     )
     parser.add_argument(
         "-ph",
-        "--phrase",
         type=str,
         help="Yes/No question for expression comprehension (e.g., 'Is the person smiling?'). This will check the presence of specific expressions in the captured images.",
     )
     parser.add_argument(
         "-hl",
-        "--headless",
         action="store_true",
         help="Run in headless mode without displaying video. Useful for running on servers without a display.",
     )
     parser.add_argument(
         "-ss",
-        "--screenshot",
         action="store_true",
         help="Enable screenshot on detection. Saves an image file when detections are made.",
     )
     parser.add_argument(
         "-lf",
-        "--log_to_file",
         action="store_true",
         help="Enable logging alerts to file. Logs will be saved in 'alerts.log'.",
     )
     parser.add_argument(
-        "-is",
-        "--display_inference_speed",
+        "-ir",
         action="store_true",
-        help="Display inference speed (inferences per second) in the console output.",
+        help="Display inference rate (inferences per second) in the console output.",
     )
     parser.add_argument(
         "-pp",
-        "--pretty_print",
         action="store_true",
         help="Enable pretty print for detections. Formats and prints detection results nicely in the console.",
     )
     parser.add_argument(
         "-il",
-        "--inference_limit",
         type=float,
         help="Limit the inference rate to X inferences per second. Useful for controlling the load on the system.",
         required=False,
     )
     parser.add_argument(
         "-ic",
-        "--inference_chain",
         nargs="+",
         help="Enable inference chain with specified phrases. Provide phrases in quotes, separated by spaces (e.g., 'Is it sunny?' 'Is it raining?').",
     )
     parser.add_argument(
         "-wi",
-        "--webcam_indices",
         nargs="+",
         type=int,
         help="Specify the indices of the webcams to use (e.g., 0 1 2).",
     )
     parser.add_argument(
         "-rtsp",
-        "--rtsp_urls",
         nargs="+",
         type=str,
         help="Specify the RTSP URLs for the video streams.",
     )
     parser.add_argument(
         "-r",
-        "--record",
         choices=["od", "infy", "infn"],
         help="Enable video recording and specify the recording mode: 'od' to start/stop based on object detection, 'infy' to start on 'yes' inference and stop on 'no', and 'infn' to start on 'no' inference and stop on 'yes'.",
     )
 
     parser.add_argument(
         "-4bit",
-        "--four_bit",
         action="store_true",
         help="Enable 4-bit quantization for model loading.",
     )
@@ -777,65 +786,63 @@ def main():
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
         "-mp",
-        "--model_path",
         type=str,
         help="Path to the pre-trained model directory. Use this if you have a local copy of the model.",
     )
     group.add_argument(
         "-dm",
-        "--download_model",
         action="store_true",
         help="Download model from Hugging Face. Use this if you want to download the model files automatically.",
     )
 
     args = parser.parse_args()
-    if not args.model_path and not args.download_model:
+    if not args.mp and not args.dm:
         parser.error("You must specify either --model_path or --download_model.")
-    quantization_mode = "4bit" if args.four_bit else None
+    quantization_mode = "4bit" if getattr(args, '4bit', False) else None
 
     try:
-        setup_logging(args.log_to_file)
-        webcam_indices = args.webcam_indices if args.webcam_indices else [0]
-        rtsp_urls = args.rtsp_urls if args.rtsp_urls else []
-        if args.download_model:
+        setup_logging(args.lf)
+        webcam_indices = args.wi if args.wi else [0]
+        rtsp_urls = args.rtsp if args.rtsp else []
+        if args.dm:
             yo_flo = YOFLO(
-                display_inference_speed=args.display_inference_speed,
-                pretty_print=args.pretty_print,
-                inference_limit=args.inference_limit,
-                class_names=args.object_detection,
+                display_inference_rate=args.ir,
+                pretty_print=args.pp,
+                inference_limit=args.il,
+                class_names=args.od,
                 webcam_indices=webcam_indices,
                 rtsp_urls=rtsp_urls,
-                record=args.record,
+                record=args.r,
                 quantization=quantization_mode,
             )
             if not yo_flo.download_model():
                 return
         else:
-            if not os.path.exists(args.model_path):
-                logging.error(f"Model path {args.model_path} does not exist.")
+            if not os.path.exists(args.mp):
+                logging.error(f"Model path {args.mp} does not exist.")
                 return
-            if not os.path.isdir(args.model_path):
-                logging.error(f"Model path {args.model_path} is not a directory.")
+            if not os.path.isdir(args.mp):
+                logging.error(f"Model path {args.mp} is not a directory.")
                 return
             yo_flo = YOFLO(
-                model_path=args.model_path,
-                display_inference_speed=args.display_inference_speed,
-                pretty_print=args.pretty_print,
-                inference_limit=args.inference_limit,
-                class_names=args.object_detection,
+                model_path=args.mp,
+                display_inference_rate=args.ir,
+                pretty_print=args.pp,
+                inference_limit=args.il,
+                class_names=args.od,
                 webcam_indices=webcam_indices,
                 rtsp_urls=rtsp_urls,
-                record=args.record,
+                record=args.r,
                 quantization=quantization_mode,
             )
-        if args.phrase:
-            yo_flo.phrase = args.phrase
-        if args.inference_chain:
-            yo_flo.set_inference_phrases(args.inference_chain)
-        yo_flo.headless = args.headless
-        yo_flo.object_detection_active = args.object_detection is not None
-        yo_flo.screenshot_active = args.screenshot
-        yo_flo.log_to_file_active = args.log_to_file
+        if args.ph:
+            yo_flo.phrase = args.ph
+        if args.ic:
+            yo_flo.set_inference_phrases(args.ic)
+        yo_flo.headless = args.hl
+        yo_flo.object_detection_active = args.od is not None
+        yo_flo.screenshot_active = args.ss
+        yo_flo.log_to_file_active = args.lf
         yo_flo.start_webcam_detection()
 
         try:
@@ -851,3 +858,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
