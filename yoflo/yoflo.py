@@ -14,12 +14,10 @@ from transformers import BitsAndBytesConfig
 
 def setup_logging(log_to_file, log_file_path="alerts.log"):
     """
-    Set up logging to file and/or console.
-
-    This function configures the logging module to log messages to both the console and optionally to a specified log file.
+    Configure logging to console and optionally a file.
 
     Args:
-        log_to_file (bool): Whether to log messages to a file.
+        log_to_file (bool): Whether to also log to a file.
         log_file_path (str, optional): Path to the log file. Defaults to "alerts.log".
     """
     handlers = [logging.StreamHandler()]
@@ -42,20 +40,18 @@ class YOFLO:
         quantization=None,
     ):
         """
-        Initialize the YO-FLO class with configuration options.
-
-        This constructor initializes the YO-FLO object with various settings for model, display, inference, and video processing.
+        Initialize the YO-FLO object with optional configurations.
 
         Args:
-            model_path (str, optional): Path to the pre-trained model directory. Defaults to None.
-            display_inference_rate (bool, optional): Whether to display inference rate. Defaults to False.
-            pretty_print (bool, optional): Whether to pretty print detections. Defaults to False.
-            inference_limit (float, optional): Limit the inference rate to X inferences per second. Defaults to None.
-            class_names (list, optional): List of class names to detect. Defaults to None.
-            webcam_indices (list, optional): Indices of the webcams to use. Defaults to None.
-            rtsp_urls (list, optional): RTSP URLs for the video streams. Defaults to None.
-            record (str, optional): Mode for video recording. Defaults to None.
-            quantization (str, optional): Quantization mode ("8bit" or "4bit"). Defaults to None.
+            model_path (str, optional): Path to the pre-trained model directory.
+            display_inference_rate (bool, optional): Show inference rate.
+            pretty_print (bool, optional): Pretty-print detection results.
+            inference_limit (float, optional): Limit inferences per second.
+            class_names (list, optional): Class names to detect.
+            webcam_indices (list, optional): Indices of webcams to use.
+            rtsp_urls (list, optional): RTSP URLs for video streams.
+            record (str, optional): Video recording mode ("od", "infy", "infn").
+            quantization (str, optional): Quantization mode ("8bit" or "4bit").
         """
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
@@ -82,15 +78,16 @@ class YOFLO:
         self.video_writer = None
         self.quantization = quantization
         self.video_out_path = f"output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.avi"
-        self.last_detection_time = time.time()  # Timer for detecting class loss
+        self.last_detection_time = time.time()
+
         if model_path:
             self.init_model(model_path)
 
     def init_model(self, model_path):
         """
-        Initialize the model and processor from the given model path.
+        Load a pre-trained model and processor from the specified directory.
 
-        This method loads a pre-trained model and its processor from a specified directory, and prepares it for inference. It handles quantization settings if specified.
+        Handles model quantization if specified.
 
         Args:
             model_path (str): Path to the pre-trained model directory.
@@ -139,8 +136,6 @@ class YOFLO:
     def update_inference_rate(self):
         """
         Calculate and log the inference rate (inferences per second).
-
-        This method calculates the rate of inferences over time and logs it, helping users understand the model's performance in real-time.
         """
         try:
             if self.inference_start_time is None:
@@ -156,15 +151,13 @@ class YOFLO:
 
     def run_object_detection(self, image):
         """
-        Perform object detection on the given image.
-
-        This method runs object detection on a provided image using the initialized model and processor, returning parsed detection results.
+        Perform object detection on a given PIL image.
 
         Args:
-            image (PIL.Image): The image to perform object detection on.
+            image (PIL.Image): Image to detect objects in.
 
         Returns:
-            dict: The parsed detection results.
+            dict: Parsed detection results.
         """
         try:
             task_prompt = "<OD>"
@@ -200,12 +193,10 @@ class YOFLO:
 
     def filter_detections(self, detections):
         """
-        Filter detections to include only specified class names.
-
-        This method filters the raw detections returned by the model to only include objects specified in the `class_names` attribute.
+        Filter detections by specified class names.
 
         Args:
-            detections (list): List of detections.
+            detections (list): List of raw detections.
 
         Returns:
             list: Filtered detections.
@@ -225,16 +216,14 @@ class YOFLO:
 
     def run_expression_comprehension(self, image, phrase):
         """
-        Run expression comprehension on the given image and phrase.
-
-        This method evaluates a given phrase against the provided image to determine if the expression is present, using the initialized model.
+        Check if a phrase (Yes/No question) holds true in a given image.
 
         Args:
-            image (PIL.Image): The image to run expression comprehension on.
-            phrase (str): The phrase to evaluate.
+            image (PIL.Image): Image to evaluate.
+            phrase (str): Phrase or question to evaluate.
 
         Returns:
-            str: The generated text.
+            str: Generated text result ("yes"/"no" or related).
         """
         try:
             task_prompt = "<CAPTION_TO_EXPRESSION_COMPREHENSION>"
@@ -270,16 +259,14 @@ class YOFLO:
 
     def plot_bbox(self, image, detections):
         """
-        Draw bounding boxes on the image based on detections.
-
-        This method draws bounding boxes around detected objects on the image using OpenCV, labeling them with their corresponding class names.
+        Draw bounding boxes on an image given detections.
 
         Args:
-            image (numpy.ndarray): The image to draw bounding boxes on.
-            detections (list): List of detections to draw.
+            image (numpy.ndarray): Input image array.
+            detections (list): Detections (bbox, label).
 
         Returns:
-            numpy.ndarray: The image with bounding boxes drawn.
+            numpy.ndarray: Image with bounding boxes.
         """
         try:
             for bbox, label in detections:
@@ -303,12 +290,10 @@ class YOFLO:
 
     def download_model(self):
         """
-        Download the model and processor from Hugging Face Hub.
-
-        This method automatically downloads the pre-trained model files from the Hugging Face Hub and initializes them for use.
+        Download the model and processor from the Hugging Face Hub.
 
         Returns:
-            bool: True if the download and initialization are successful, False otherwise.
+            bool: True if successful, False otherwise.
         """
         try:
             local_model_dir = "model"
@@ -326,7 +311,7 @@ class YOFLO:
                 )
                 return False
             logging.info(
-                f"Model and associated files downloaded and initialized at {os.path.abspath(local_model_dir)}"
+                f"Model downloaded and initialized at {os.path.abspath(local_model_dir)}"
             )
             self.init_model(local_model_dir)
             return True
@@ -338,18 +323,17 @@ class YOFLO:
 
     def handle_recording_by_detection(self, detections, frame):
         """
-        Handle recording based on object detection results.
+        Control recording based on object detections.
 
-        This method controls video recording based on the presence of detections,
-        starting or stopping recording as needed. If no detections are found for longer than 1 second,
-        recording will stop. Recording only occurs if the 'record' flag is set.
+        Starts or stops recording depending on detection presence. If no detections
+        for more than 1 second, stops recording (if recording mode is set).
 
         Args:
-            detections (list): List of detections from the object detection process.
-            frame (numpy.ndarray): The frame to use for recording.
+            detections (list): Current frame detections.
+            frame (numpy.ndarray): Current video frame.
         """
         try:
-            if self.record:  # Check if recording is enabled
+            if self.record:
                 current_time = time.time()
                 if detections:
                     self.start_recording(frame)
@@ -357,15 +341,13 @@ class YOFLO:
                 else:
                     if (current_time - self.last_detection_time) > 1:
                         self.stop_recording()
-                        logging.info("Recording stopped due to loss of detection for more than 1 second.")
+                        logging.info("Recording stopped due to no detection for 1+ second.")
         except Exception as e:
             logging.error(f"Error handling recording by detection: {e}")
 
     def start_webcam_detection(self):
         """
-        Start separate threads for each specified webcam or RTSP stream.
-
-        This method initiates separate threads to handle object detection on multiple webcam indices or RTSP URLs specified during initialization.
+        Start threads for each webcam or RTSP stream.
         """
         try:
             if self.webcam_threads:
@@ -391,26 +373,21 @@ class YOFLO:
 
     def _webcam_detection_thread(self, source):
         """
-        Run the webcam detection loop in a separate thread for a specific webcam or RTSP stream.
-
-        This method handles video capture and object detection in a loop, processing each frame in real-time.
+        Detection loop for a specific webcam or RTSP stream in a separate thread.
 
         Args:
-            source (str or int): The source index or RTSP URL for the webcam.
+            source (str or int): Webcam index or RTSP URL.
         """
         try:
-            if isinstance(source, str):
-                cap = cv2.VideoCapture(source)
-            else:
-                cap = cv2.VideoCapture(source)
+            cap = cv2.VideoCapture(source)
             if not cap.isOpened():
-                logging.error(f"Error: Could not open video source {source}.")
+                logging.error(f"Could not open video source {source}.")
                 return
             window_name = f"Object Detection Source {source}"
             while not self.stop_webcam_flag.is_set():
                 ret, frame = cap.read()
                 if not ret:
-                    logging.error(f"Error: Failed to capture image from source {source}.")
+                    logging.error(f"Failed to capture image from source {source}.")
                     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Error: Failed to capture image from source {source}.")
                     break
                 image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -421,6 +398,7 @@ class YOFLO:
                     if time_since_last_inference < 1 / self.inference_limit:
                         time.sleep(1 / self.inference_limit - time_since_last_inference)
                     current_time = time.time()
+
                 if self.object_detection_active:
                     results = self.run_object_detection(image_pil)
                     if results and "<OD>" in results:
@@ -476,6 +454,7 @@ class YOFLO:
                             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inference {idx + 1} from source {source}: {'PASS' if result else 'FAIL'}")
                     self.inference_count += 1
                     self.update_inference_rate()
+
                 if not self.headless:
                     if self.recording:
                         self.video_writer.write(frame)
@@ -498,12 +477,9 @@ class YOFLO:
             logging.error(f"Error in detection thread {source}: {e}")
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Error in detection thread {source}: {e}")
 
-
     def stop_webcam_detection(self):
         """
         Stop all webcam detection threads.
-
-        This method stops the webcam detection process by signaling all running threads to terminate gracefully.
         """
         try:
             self.object_detection_active = False
@@ -519,12 +495,10 @@ class YOFLO:
 
     def save_screenshot(self, frame):
         """
-        Save a screenshot of the current frame.
-
-        This method captures a screenshot of the current frame being processed and saves it as a PNG file with a timestamped filename.
+        Save a screenshot of the current frame as a timestamped PNG.
 
         Args:
-            frame (numpy.ndarray): The frame to save as a screenshot.
+            frame (numpy.ndarray): Current frame to save.
         """
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -541,12 +515,10 @@ class YOFLO:
 
     def log_alert(self, message):
         """
-        Log an alert message to a file.
-
-        This method appends alert messages to a log file, including a timestamp, for record-keeping and analysis.
+        Log an alert message to the file with a timestamp.
 
         Args:
-            message (str): The alert message to log.
+            message (str): Alert message to log.
         """
         try:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
@@ -563,20 +535,16 @@ class YOFLO:
 
     def pretty_print_detections(self, detections):
         """
-        Pretty print the detections to the console.
-
-        This method formats and prints detection results in a human-readable form for easy interpretation.
+        Pretty-print detections to the console.
 
         Args:
-            detections (list): List of detections to print.
+            detections (list): Detections to print.
         """
         try:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             logging.info("\n" + "=" * 50)
             for bbox, label in detections:
-                bbox_str = (
-                    f"[{bbox[0]:.2f}, {bbox[1]:.2f}, {bbox[2]:.2f}, {bbox[3]:.2f}]"
-                )
+                bbox_str = f"[{bbox[0]:.2f}, {bbox[1]:.2f}, {bbox[2]:.2f}, {bbox[3]:.2f}]"
                 logging.info(f"- {label}: {bbox_str} at {timestamp}")
             logging.info("=" * 50 + "\n")
         except Exception as e:
@@ -584,12 +552,10 @@ class YOFLO:
 
     def pretty_print_expression(self, clean_result):
         """
-        Pretty print the expression comprehension result to the console.
-
-        This method formats and prints the result of expression comprehension, highlighting the outcome in a readable format.
+        Pretty-print the expression comprehension result.
 
         Args:
-            clean_result (str): The clean result to print.
+            clean_result (str): The cleaned result text.
         """
         try:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -604,27 +570,25 @@ class YOFLO:
 
     def set_inference_phrases(self, phrases):
         """
-        Set the phrases for the inference chain.
-
-        This method allows setting a list of phrases to be evaluated in the inference chain for expression comprehension tasks.
+        Set phrases for the inference chain.
 
         Args:
-            phrases (list): List of phrases for the inference chain.
+            phrases (list): Phrases to evaluate in the chain.
         """
         self.inference_phrases = phrases
         logging.info(f"Inference phrases set: {self.inference_phrases}")
 
     def evaluate_inference_chain(self, image):
         """
-        Evaluate the inference chain based on the set phrases.
+        Evaluate multiple phrases (inference chain) against an image.
 
-        This method processes the image against each phrase in the inference chain, determining an overall result based on individual outcomes.
+        The overall result depends on the count of "yes" responses.
 
         Args:
-            image (PIL.Image): The image to evaluate.
+            image (PIL.Image): Image to evaluate.
 
         Returns:
-            tuple: Overall result and individual phrase results.
+            tuple: (overall_result, list_of_individual_results)
         """
         try:
             if not self.inference_phrases:
@@ -634,10 +598,7 @@ class YOFLO:
             for phrase in self.inference_phrases:
                 result = self.run_expression_comprehension(image, phrase)
                 if result:
-                    if "yes" in result.lower():
-                        results.append(True)
-                    else:
-                        results.append(False)
+                    results.append("yes" in result.lower())
             overall_result = "PASS" if results.count(True) >= 2 else "FAIL"
             return overall_result, results
         except Exception as e:
@@ -646,12 +607,10 @@ class YOFLO:
 
     def start_recording(self, frame):
         """
-        Start recording the video.
-
-        This method initiates video recording, setting up the video writer based on the frame's dimensions.
+        Start video recording.
 
         Args:
-            frame (numpy.ndarray): The frame to use for setting the video writer.
+            frame (numpy.ndarray): Frame for setting video writer parameters.
         """
         try:
             if not self.recording and self.record:
@@ -669,9 +628,7 @@ class YOFLO:
 
     def stop_recording(self):
         """
-        Stop recording the video.
-
-        This method stops the video recording process and releases the video writer.
+        Stop video recording and release the video writer.
         """
         try:
             if self.recording:
@@ -683,13 +640,11 @@ class YOFLO:
 
     def handle_recording_by_inference(self, inference_result, frame):
         """
-        Handle recording based on inference result.
-
-        This method controls video recording based on the results of expression comprehension, starting or stopping recording as needed.
+        Control recording based on Yes/No inference result.
 
         Args:
-            inference_result (str): The inference result ("yes" or "no").
-            frame (numpy.ndarray): The frame to use for recording.
+            inference_result (str): "yes" or "no".
+            frame (numpy.ndarray): Current frame.
         """
         try:
             if self.record == "infy" and inference_result == "yes":
@@ -707,92 +662,88 @@ class YOFLO:
 def main():
     """
     Parse command-line arguments and run the YO-FLO application.
-
-    This is the main function that sets up the YO-FLO application, parsing command-line arguments and initiating the object detection process.
     """
     parser = argparse.ArgumentParser(
-        description="YO-FLO: A proof-of-concept in using advanced vision-language models as a YOLO alternative."
+        description="YO-FLO: A proof-of-concept vision-language model as a YOLO alternative."
     )
     parser.add_argument(
         "-od",
         nargs="*",
-        help='Enable object detection with optional class names to detect (e.g., "cat", "dog"). Specify class names in quotes.',
+        help='Enable object detection with optional class names (e.g. "cat", "dog").'
     )
     parser.add_argument(
         "-ph",
         type=str,
-        help="Yes/No question for expression comprehension (e.g., 'Is the person smiling?'). This will check the presence of specific expressions in the captured images.",
+        help="Yes/No question for expression comprehension (e.g. 'Is the person smiling?')."
     )
     parser.add_argument(
         "-hl",
         action="store_true",
-        help="Run in headless mode without displaying video. Useful for running on servers without a display.",
+        help="Run in headless mode (no video display)."
     )
     parser.add_argument(
         "-ss",
         action="store_true",
-        help="Enable screenshot on detection. Saves an image file when detections are made.",
+        help="Enable screenshot on detection."
     )
     parser.add_argument(
         "-lf",
         action="store_true",
-        help="Enable logging alerts to file. Logs will be saved in 'alerts.log'.",
+        help="Enable logging alerts to file."
     )
     parser.add_argument(
         "-ir",
         action="store_true",
-        help="Display inference rate (inferences per second) in the console output.",
+        help="Display inference rate."
     )
     parser.add_argument(
         "-pp",
         action="store_true",
-        help="Enable pretty print for detections. Formats and prints detection results nicely in the console.",
+        help="Enable pretty print for detections."
     )
     parser.add_argument(
         "-il",
         type=float,
-        help="Limit the inference rate to X inferences per second. Useful for controlling the load on the system.",
-        required=False,
+        help="Limit the inference rate (inferences per second)."
     )
     parser.add_argument(
         "-ic",
         nargs="+",
-        help="Enable inference chain with specified phrases. Provide phrases in quotes, separated by spaces (e.g., 'Is it sunny?' 'Is it raining?').",
+        help="Enable inference chain with specified phrases."
     )
     parser.add_argument(
         "-wi",
         nargs="+",
         type=int,
-        help="Specify the indices of the webcams to use (e.g., 0 1 2).",
+        help="Specify the indices of the webcams to use."
     )
     parser.add_argument(
         "-rtsp",
         nargs="+",
         type=str,
-        help="Specify the RTSP URLs for the video streams.",
+        help="Specify the RTSP URLs for video streams."
     )
     parser.add_argument(
         "-r",
         choices=["od", "infy", "infn"],
-        help="Enable video recording and specify the recording mode: 'od' to start/stop based on object detection, 'infy' to start on 'yes' inference and stop on 'no', and 'infn' to start on 'no' inference and stop on 'yes'.",
+        help="Video recording mode based on detections or inferences."
     )
-
     parser.add_argument(
         "-4bit",
         action="store_true",
-        help="Enable 4-bit quantization for model loading.",
+        help="Enable 4-bit quantization."
     )
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
         "-mp",
         type=str,
-        help="Path to the pre-trained model directory. Use this if you have a local copy of the model.",
+        help="Path to the local pre-trained model directory."
     )
     group.add_argument(
         "-dm",
         action="store_true",
-        help="Download model from Hugging Face. Use this if you want to download the model files automatically.",
+        help="Download the model from Hugging Face."
     )
 
     args = parser.parse_args()
@@ -858,4 +809,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
