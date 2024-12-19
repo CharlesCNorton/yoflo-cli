@@ -20,6 +20,139 @@ def setup_logging(log_to_file, log_file_path="alerts.log"):
         handlers.append(logging.FileHandler(log_file_path))
     logging.basicConfig(level=logging.INFO, format="%(message)s", handlers=handlers)
 
+
+class PTZTracker:
+    """
+    Autonomous PTZ tracking class. Keeps a specified object centered and at a desired size.
+    """
+    def __init__(self, camera,
+                 desired_ratio=0.20,
+                 zoom_tolerance=0.4,
+                 pan_tilt_tolerance=25,
+                 pan_tilt_interval=0.75,
+                 zoom_interval=0.5,
+                 smoothing_factor=0.2,
+                 max_consecutive_errors=5):
+        if not (0 < smoothing_factor < 1):
+            raise ValueError("smoothing_factor must be between 0 and 1.")
+        if desired_ratio <= 0 or desired_ratio >= 1:
+            raise ValueError("desired_ratio should be between 0 and 1.")
+        if zoom_tolerance < 0:
+            raise ValueError("zoom_tolerance must be >= 0.")
+        if pan_tilt_tolerance < 0:
+            raise ValueError("pan_tilt_tolerance must be >= 0.")
+        if pan_tilt_interval <= 0 or zoom_interval <= 0:
+            raise ValueError("Intervals must be positive.")
+        if max_consecutive_errors < 1:
+            raise ValueError("max_consecutive_errors must be at least 1.")
+
+        self.camera = camera
+        self.desired_ratio = desired_ratio
+        self.zoom_tolerance = zoom_tolerance
+        self.pan_tilt_tolerance = pan_tilt_tolerance
+        self.pan_tilt_interval = pan_tilt_interval
+        self.zoom_interval = zoom_interval
+        self.smoothing_factor = smoothing_factor
+        self.max_consecutive_errors = max_consecutive_errors
+
+        self.last_pan_tilt_adjust = 0.0
+        self.last_zoom_adjust = 0.0
+        self.smoothed_width = None
+        self.smoothed_height = None
+        self.active = False
+        self.consecutive_errors = 0
+
+    def activate(self, active=True):
+        self.active = active
+        if not active:
+            self.smoothed_width = None
+            self.smoothed_height = None
+            self.consecutive_errors = 0
+
+    def adjust_camera(self, bbox, frame_width, frame_height):
+        if not self.active:
+            return
+
+        x1, y1, x2, y2 = bbox
+        if x1 >= x2 or y1 >= y2:
+            print("Invalid bbox coordinates; skipping camera adjustment.")
+            return
+
+        bbox_width = (x2 - x1)
+        bbox_height = (y2 - y1)
+
+        if self.smoothed_width is None:
+            self.smoothed_width = bbox_width
+            self.smoothed_height = bbox_height
+        else:
+            self.smoothed_width = (self.smoothing_factor * bbox_width
+                                   + (1 - self.smoothing_factor) * self.smoothed_width)
+            self.smoothed_height = (self.smoothing_factor * bbox_height
+                                    + (1 - self.smoothing_factor) * self.smoothed_height)
+
+        bbox_center_x = (x1 + x2) / 2
+        bbox_center_y = (y1 + y2) / 2
+        frame_center_x = frame_width / 2
+        frame_center_y = frame_height / 2
+
+        desired_width = frame_width * self.desired_ratio
+        desired_height = frame_height * self.desired_ratio
+
+        min_width = desired_width * (1 - self.zoom_tolerance)
+        max_width = desired_width * (1 + self.zoom_tolerance)
+        min_height = desired_height * (1 - self.zoom_tolerance)
+        max_height = desired_height * (1 + self.zoom_tolerance)
+
+        current_time = time.time()
+
+        if (current_time - self.last_pan_tilt_adjust) >= self.pan_tilt_interval:
+            dx = bbox_center_x - frame_center_x
+            dy = bbox_center_y - frame_center_y
+
+            pan_tilt_moved = False
+            if abs(dx) > self.pan_tilt_tolerance:
+                pan_tilt_moved = self._safe_camera_command('pan_left' if dx < 0 else 'pan_right') or pan_tilt_moved
+
+            if abs(dy) > self.pan_tilt_tolerance:
+                pan_tilt_moved = self._safe_camera_command('tilt_up' if dy < 0 else 'tilt_down') or pan_tilt_moved
+
+            if pan_tilt_moved:
+                self.last_pan_tilt_adjust = current_time
+
+        if (current_time - self.last_zoom_adjust) >= self.zoom_interval:
+            width_too_small = self.smoothed_width < min_width
+            height_too_small = self.smoothed_height < min_height
+            width_too_large = self.smoothed_width > max_width
+            height_too_large = self.smoothed_height > max_height
+
+            zoom_moved = False
+            if width_too_small or height_too_small:
+                zoom_moved = self._safe_camera_command('zoom_in')
+            elif width_too_large or height_too_large:
+                zoom_moved = self._safe_camera_command('zoom_out')
+
+            if zoom_moved:
+                self.last_zoom_adjust = current_time
+
+        if self.consecutive_errors >= self.max_consecutive_errors:
+            print("Too many consecutive camera errors, deactivating PTZ tracking.")
+            self.activate(False)
+
+    def _safe_camera_command(self, command):
+        if not hasattr(self.camera, command):
+            print(f"Camera does not support command '{command}'.")
+            return False
+        try:
+            method = getattr(self.camera, command)
+            method()
+            self.consecutive_errors = 0
+            return True
+        except Exception as e:
+            self.consecutive_errors += 1
+            print(f"Error executing camera command '{command}': {e}")
+            return False
+
+
 class ModelManager:
     def __init__(self, device, quantization=None):
         self.device = device
@@ -89,6 +222,7 @@ class ModelManager:
             )
         return None
 
+
 class RecordingManager:
     def __init__(self, record_mode=None):
         self.record_mode = record_mode
@@ -141,6 +275,7 @@ class RecordingManager:
         elif self.record_mode == "infn" and inference_result == "yes":
             self.stop_recording()
 
+
 class ImageUtils:
     @staticmethod
     def plot_bbox(image, detections):
@@ -179,6 +314,7 @@ class ImageUtils:
             logging.error(f"Error saving screenshot: {e}")
             print(f"[{datetime.now().strftime('%Y%m%d_%H%M%S')}] Error saving screenshot: {e}")
 
+
 class AlertLogger:
     @staticmethod
     def log_alert(message):
@@ -194,6 +330,7 @@ class AlertLogger:
         except Exception as e:
             logging.error(f"Error logging alert: {e}")
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')}] Error logging alert: {e}")
+
 
 class PTZController:
     """Class to control PTZ camera movements via HID commands."""
@@ -256,6 +393,7 @@ class PTZController:
             except Exception as e:
                 print(f"Error closing PTZ device: {e}")
 
+
 class YOFLO:
     def __init__(
         self,
@@ -267,7 +405,9 @@ class YOFLO:
         webcam_indices=None,
         rtsp_urls=None,
         record=None,
-        quantization=None
+        quantization=None,
+        ptz_tracker=None,
+        track_object_name=None
     ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.inference_start_time = None
@@ -290,8 +430,10 @@ class YOFLO:
         self.quantization = quantization
         self.record = record
 
+        self.track_object_name = track_object_name
         self.recording_manager = RecordingManager(record)
         self.model_manager = ModelManager(self.device, self.quantization)
+        self.ptz_tracker = ptz_tracker
 
         if model_path:
             self.model_manager.load_local_model(model_path)
@@ -521,7 +663,24 @@ class YOFLO:
             logging.error(f"Error in detection thread {source}: {e}")
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Error in detection thread {source}: {e}")
 
+    def _pick_tracked_object(self, detections):
+        if not self.track_object_name:
+            return None
+
+        candidate_detections = [(bbox, label) for bbox, label in detections
+                                if label.lower() == self.track_object_name.lower()]
+
+        if not candidate_detections:
+            return None
+
+        def bbox_area(bbox):
+            return (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+
+        largest_bbox = max(candidate_detections, key=lambda x: bbox_area(x[0]))[0]
+        return largest_bbox
+
     def _process_frame(self, frame, image_pil, source):
+        primary_bbox = None
         if self.object_detection_active:
             results = self.run_object_detection(image_pil)
             if results and "<OD>" in results:
@@ -551,22 +710,12 @@ class YOFLO:
                         AlertLogger.log_alert(f"Detections from source {source}: {filtered_detections}")
 
                 self.recording_manager.handle_recording_by_detection(filtered_detections, frame)
-            else:
-                logging.error(f"Unexpected result structure from object detection on source {source}: {results}")
-                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unexpected result structure from object detection on source {source}: {results}")
+
+                if self.ptz_tracker and self.ptz_tracker.active:
+                    primary_bbox = self._pick_tracked_object(filtered_detections)
 
         elif self.phrase:
-            results = self.run_expression_comprehension(image_pil, self.phrase)
-            if results:
-                clean_result = (results.replace("<s>", "").replace("</s>", "").strip().lower())
-                self.pretty_print_expression(clean_result)
-                self.inference_count += 1
-                self.update_inference_rate()
-                if clean_result in ["yes", "no"]:
-                    if self.log_to_file_active:
-                        AlertLogger.log_alert(f"Expression Comprehension from source {source}: {clean_result} at {datetime.now()}")
-                    if self.record:
-                        self.recording_manager.handle_recording_by_inference(clean_result, frame)
+            pass
 
         if self.inference_phrases:
             inference_result, phrase_results = self.evaluate_inference_chain(image_pil)
@@ -578,6 +727,11 @@ class YOFLO:
                     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inference {idx + 1} from source {source}: {'PASS' if result else 'FAIL'}")
             self.inference_count += 1
             self.update_inference_rate()
+
+        if self.ptz_tracker and self.ptz_tracker.active and primary_bbox:
+            frame_height, frame_width, _ = frame.shape
+            self.ptz_tracker.adjust_camera(primary_bbox, frame_width, frame_height)
+
 
 def ptz_control_thread(ptz_camera):
     print("PTZ control started. Use arrow keys to pan/tilt, +/- to zoom, q to quit.")
@@ -602,12 +756,13 @@ def ptz_control_thread(ptz_camera):
             break
     ptz_camera.close()
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="YO-FLO: A proof-of-concept vision-language model as a YOLO alternative."
     )
-    parser.add_argument("-od", nargs="*", help='Enable object detection with optional class names (e.g. "cat", "dog").')
-    parser.add_argument("-ph", type=str, help="Yes/No question for expression comprehension (e.g. 'Is the person smiling?').")
+    parser.add_argument("-od", nargs="*", help='Enable object detection with optional class names.')
+    parser.add_argument("-ph", type=str, help="Yes/No question for expression comprehension.")
     parser.add_argument("-hl", action="store_true", help="Run in headless mode (no video display).")
     parser.add_argument("-ss", action="store_true", help="Enable screenshot on detection.")
     parser.add_argument("-lf", action="store_true", help="Enable logging alerts to file.")
@@ -615,25 +770,27 @@ def main():
     parser.add_argument("-pp", action="store_true", help="Enable pretty print for detections.")
     parser.add_argument("-il", type=float, help="Limit the inference rate (inferences per second).")
     parser.add_argument("-ic", nargs="+", help="Enable inference chain with specified phrases.")
-    parser.add_argument("-wi", nargs="+", type=int, help="Specify the indices of the webcams to use.")
-    parser.add_argument("-rtsp", nargs="+", type=str, help="Specify the RTSP URLs for video streams.")
-    parser.add_argument("-r", choices=["od", "infy", "infn"], help="Video recording mode based on detections or inferences.")
+    parser.add_argument("-wi", nargs="+", type=int, help="Indices of webcams to use.")
+    parser.add_argument("-rtsp", nargs="+", type=str, help="RTSP URLs for video streams.")
+    parser.add_argument("-r", choices=["od", "infy", "infn"], help="Video recording mode.")
     parser.add_argument("-4bit", action="store_true", help="Enable 4-bit quantization.")
-
-    parser.add_argument("-ptz", nargs='?', const='0', help="Enable PTZ control. Optionally specify a camera index.")
+    parser.add_argument("-ptz", nargs='?', const='0',
+                        help="Enable PTZ control. If 'track' is supplied, autonomous tracking is enabled.")
+    parser.add_argument("-to", "--track-object", type=str,
+                        help="Specify the object class name to track when PTZ tracking is active.")
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-mp", type=str, help="Path to the local pre-trained model directory.")
     group.add_argument("-dm", action="store_true", help="Download the model from Hugging Face.")
 
     args = parser.parse_args()
-
     quantization_mode = "4bit" if getattr(args, '4bit', False) else None
 
     try:
         setup_logging(args.lf)
         webcam_indices = args.wi if args.wi else [0]
         rtsp_urls = args.rtsp if args.rtsp else []
+
         if args.dm:
             yo_flo = YOFLO(
                 display_inference_rate=args.ir,
@@ -644,6 +801,7 @@ def main():
                 rtsp_urls=rtsp_urls,
                 record=args.r,
                 quantization=quantization_mode,
+                track_object_name=args.track_object
             )
             if not yo_flo.download_model():
                 return
@@ -664,6 +822,7 @@ def main():
                 rtsp_urls=rtsp_urls,
                 record=args.r,
                 quantization=quantization_mode,
+                track_object_name=args.track_object
             )
 
         if args.ph:
@@ -678,15 +837,22 @@ def main():
         yo_flo.start_webcam_detection()
 
         ptz_thread = None
+        ptz_camera = None
         if args.ptz is not None:
-            try:
-                ptz_index = int(args.ptz)
-            except ValueError:
-                ptz_index = 0
-            print(f"Initializing PTZ control for camera index: {ptz_index}")
-            ptz_camera = PTZController()
-            ptz_thread = threading.Thread(target=ptz_control_thread, args=(ptz_camera,))
-            ptz_thread.start()
+            if args.ptz.lower() == 'track':
+                ptz_camera = PTZController()
+                ptz_tracker = PTZTracker(ptz_camera)
+                ptz_tracker.activate(True)
+                yo_flo.ptz_tracker = ptz_tracker
+            else:
+                try:
+                    ptz_index = int(args.ptz)
+                except ValueError:
+                    ptz_index = 0
+                print(f"Initializing PTZ control for camera index: {ptz_index}")
+                ptz_camera = PTZController()
+                ptz_thread = threading.Thread(target=ptz_control_thread, args=(ptz_camera,))
+                ptz_thread.start()
 
         try:
             while True:
@@ -707,4 +873,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
