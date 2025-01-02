@@ -1,259 +1,334 @@
-# YOFLO-CLI
+YOFLO-CLI (v1.0.0)
+
+By: Charles C. Norton
+
+INTRODUCTION
+------------
+YOFLO-CLI is a robust command-line interface for the YO-FLO package. Version 1.0.0 marks our official transition out of beta, representing a major milestone in stability, feature completeness, and extended functionality. Building on the powerful Microsoft Florence-2 vision-language model, YOFLO-CLI provides a flexible platform that unites real-time object detection, yes/no inference, multi-step inference chaining, automated screenshot capture, logging, and video recording. This comprehensive solution is suitable for security applications, visual monitoring, content creation, and any scenario that benefits from advanced vision-language understanding.
+
+
+TABLE OF CONTENTS
+-----------------
+1. INTRODUCTION
+2. WHAT IS YOFLO-CLI?
+3. OFFICIAL 1.0.0 RELEASE OVERVIEW
+4. CORE FUNCTIONALITY
+5. KEY FEATURES
+6. DIFFERENCES FROM PREVIOUS VERSIONS
+7. TABLE OF CONTENTS EXPLANATION
+8. EXTENDED DETAILED FEATURES
+   8.1 OBJECT DETECTION
+   8.2 BINARY YES/NO INFERENCE
+   8.3 INFERENCE CHAINS
+   8.4 INFERENCE RATE & PERFORMANCE MONITORING
+   8.5 SCREENSHOT ON DETECTION
+   8.6 DETECTION LOGGING
+   8.7 HEADLESS MODE
+   8.8 PRETTY PRINT
+   8.9 MULTI-WEBCAM SUPPORT
+   8.10 VIDEO RECORDING
+   8.11 MODEL DOWNLOAD
+9. HOW IT WORKS UNDER THE HOOD
+10. USE CASES & APPLICATION SCENARIOS
+11. FULL INSTALLATION GUIDE
+   11.1 INSTALLATION FROM SOURCE
+   11.2 INSTALLATION FROM PYPI
+12. SYSTEM REQUIREMENTS & ENVIRONMENT SETUP
+   12.1 OPERATING SYSTEM
+   12.2 GPU / CUDA
+   12.3 PYTHON VERSION
+   12.4 DEPENDENCIES & ENVIRONMENT VARIABLES
+13. COMPLETE USAGE INSTRUCTIONS
+   13.1 PRIMARY COMMAND-LINE FLAGS
+   13.2 ADVANCED COMMAND-LINE FLAGS
+   13.3 EXAMPLE COMMANDS
+14. INFERENCE CHAIN & COMPLEX LOGIC
+   14.1 WHY IT MATTERS
+   14.2 EXAMPLES
+15. PERFORMANCE TUNING & OPTIMIZATION
+   15.1 INFERENCE LIMIT
+   15.2 HEADLESS MODE
+   15.3 MULTI-THREADED OPERATIONS
+   15.4 GPU OPTIMIZATIONS
+16. TROUBLESHOOTING
+   16.1 COMMON ERRORS
+   16.2 MODEL LOADING ISSUES
+   16.3 CAMERA / VIDEO FEED PROBLEMS
+   16.4 SLOW PERFORMANCE
+17. FREQUENTLY ASKED QUESTIONS (FAQ)
+   17.1 CAN I USE A DIFFERENT MODEL?
+   17.2 WILL THIS WORK WITHOUT A GPU?
+   17.3 HOW DO I RUN MULTIPLE INSTANCES AT ONCE?
+   17.4 DOES HEADLESS MODE AFFECT ACCURACY?
+18. CONTRIBUTING & COMMUNITY
+19. LICENSE
+20. ACKNOWLEDGMENTS
+21. FUTURE DIRECTIONS
+22. CONCLUSION
+
+
+1. INTRODUCTION
+---------------
+YOFLO-CLI is a command-line interface designed to unify advanced computer vision and natural language understanding tasks in one cohesive toolkit. Version 1.0.0 marks the milestone release out of beta, focusing on stability, comprehensive user documentation, and fully-tested functionality. This software builds on Microsoft’s Florence-2 model to achieve robust object detection and detailed linguistic reasoning, enabling real-time insights far beyond typical bounding box detection.
+
+
+2. WHAT IS YOFLO-CLI?
+---------------------
+YOFLO-CLI (YOFLO stands for "Your Object-Finding Language Operator") is a versatile command-line tool facilitating object detection, binary yes/no inference, multi-phrase inference chaining, screenshot capture, detection logging, real-time inference speed measurement, and selective video recording. Its remarkable feature is the ability to parse everyday language queries against live video feeds, harnessing the strength of Florence-2’s vision-language alignment to detect objects, answer questions, and perform elaborate checks on visual scenes.
+
+
+3. OFFICIAL 1.0.0 RELEASE OVERVIEW
+----------------------------------
+With this first official release:
+- We have exited the beta stage.
+- Introduced refined inference chain logic and improved performance for multi-webcam scenarios.
+- Enhanced the user experience with verbose logging, extended code comments, and a structured codebase for easier debugging and future expansion.
+- Thoroughly tested on Ubuntu 22.04, verified partial Windows 11 support, and built in-house GPU optimizations for real-time usage.
+
+
+4. CORE FUNCTIONALITY
+---------------------
+- Object Detection: Identify objects in the camera feed or RTSP stream. By specifying class names, the system can filter out irrelevant detections, or it can display everything recognized.
+- Binary Inference: Pose yes/no questions such as “Is the table empty?” or “Is the person wearing sunglasses?” to get a direct answer, leveraging Florence-2’s text-image alignment.
+- Inference Chains: Allows multiple yes/no checks to be performed in a single pass, returning an aggregated “pass” or “fail” verdict. This effectively simulates multi-step reasoning.
+- Screenshot on Detection: Whenever a target object is detected, the system can automatically save a timestamped image file for reference.
+- Logging: All detection events can be appended to a dedicated file (alerts.log) for auditing, record-keeping, or post-event analysis.
+- Video Recording: By specifying triggers (object detection or certain inference outcomes), video recording can be started and stopped automatically, saving only the intervals of interest.
+
+
+5. KEY FEATURES
+---------------
+- Real-Time Operation: Processes frames in real-time, making it suitable for live surveillance or interactive display setups.
+- Headless Mode: Ideal for server or cloud environments where no GUI is available. Gains a typical 20% improvement in throughput when no display is rendered.
+- Inference Speed Logging: Monitors inferences per second, enabling optimization and hardware scaling decisions.
+- Multi-Webcam and RTSP: Users can pass multiple webcam indices or RTSP URIs for parallel analysis of various angles or streams.
 
-YOFLO-CLI is a command-line interface for the YO-FLO package, providing advanced object detection and binary inference capabilities using the Florence-2 vision-language model in real-time. This tool leverages state-of-the-art vision models to perform tasks such as object detection and binary inference based on referring expression comprehension.
 
-## Features
+6. DIFFERENCES FROM PREVIOUS VERSIONS
+-------------------------------------
+Compared to version 0.9.5 (beta), 1.0.0 introduces:
+- Official production readiness, with more stringent testing under high-load conditions.
+- Deeper inference chain logic, supporting complex multi-step scenario checks.
+- Expanded video recording triggers, including “od” (detect objects), “infy” (start on yes, end on no), and “infn” (start on no, end on yes).
+- Significantly improved error handling, logging clarity, and stable concurrency management across multiple threads.
 
-### Object Detection
 
-Identify and classify objects within a video feed. You can specify class names or display all detections if no class names are provided. Unlike traditional models limited to a fixed set of classes (e.g., COCO dataset), Florence-2 can detect an expansive array of objects due to its advanced vision-language capabilities. While it may be slower than models like YOLO for pure object detection, it excels when natural language processing (NLP) logic is required, allowing it to handle tasks that require understanding and reasoning about the visual input.
+7. TABLE OF CONTENTS EXPLANATION
+--------------------------------
+This document is structured for maximum clarity. Sections detail every aspect of YOFLO-CLI, from the simplest usage instructions (to help new users get started quickly) through extensive customization options. Follow each section for deeper insights into the tool’s architecture, deployment in varied environments, and solutions for common issues.
 
-### Binary Inference
 
-Answer yes/no questions based on the visual input. This feature leverages Florence-2’s ability to understand complex visual scenes and provide binary responses, making it ideal for simple decision-making tasks. For example, it can answer questions like "Is the person smiling?" by analyzing the visual input in real-time.
+8. EXTENDED DETAILED FEATURES
+-----------------------------
+8.1 OBJECT DETECTION:
+YOFLO-CLI leverages Florence-2’s advanced vision-language alignment to detect an extensive range of object types. Unlike standard object detectors that rely on fixed class sets, Florence-2 can interpret textual labels dynamically. If no class names are specified, YOFLO-CLI prints out everything the model recognizes in the frame.
 
-### Inference Chain
+8.2 BINARY YES/NO INFERENCE:
+YOFLO-CLI’s yes/no queries rely on Florence-2’s capacity for visual question answering. Users submit a question like “Is the car parked?” and the system processes the frame to determine a yes or no answer. This feature is ideal for quick gating conditions or real-time decision-making scenarios where a binary outcome is sufficient.
 
-Evaluate multiple inferences and determine overall results based on a sequence of phrases. This allows for a more comprehensive context analysis within individual frames by examining multiple aspects of the scene. For example, to determine if a person is working, you might check if their eyes are open, their hands are on the keyboard, and they are facing the computer. This feature addresses the limitation that newer and smaller vision-language models are capable of answering simple questions, but not compound ones.
+8.3 INFERENCE CHAINS:
+Arguably the biggest advantage for complex tasks. By sequentially testing multiple yes/no queries, the system compiles a final pass/fail. For instance, you might check “Is there a person?” “Are they awake?” “Are they seated at a desk?” If all conditions are “yes,” the final result is a pass.
 
-### Inference Rate Calculation
+8.4 INFERENCE RATE & PERFORMANCE MONITORING:
+YOFLO-CLI can measure inferences per second in real time, assisting in diagnosing bottlenecks. By adjusting the inference_limit, advanced users can balance system load with responsiveness, suitable for resource-constrained hardware or multi-feed environments.
 
-Measure the rate of inferences per second. This feature helps monitor the performance of the system and optimize for real-time processing, providing insights into how efficiently the model processes visual data.
+8.5 SCREENSHOT ON DETECTION:
+Whenever an object of interest is detected, YOFLO-CLI can optionally capture the current frame. These screenshots are automatically timestamped, simplifying traceability or dataset creation for future model training.
 
-### Real-time Processing
+8.6 DETECTION LOGGING:
+All detections (and optionally inferences) may be logged in an alerts.log file. Each entry is date- and time-stamped for subsequent auditing or historical records. Perfect for analyzing system performance or investigating anomalies after the fact.
 
-Process video feeds from a webcam in real-time. This enables immediate analysis and response to visual input, which is crucial for applications such as surveillance, live monitoring, and interactive systems.
+8.7 HEADLESS MODE:
+Running “headless” means no OpenCV display windows. This mode is highly beneficial for servers, cloud VMs, or HPC clusters, where no display is available. It also typically speeds up frame processing by eliminating rendering overhead.
 
-### Screenshot on Detection
+8.8 PRETTY PRINT:
+A user-friendly textual output that organizes detections neatly. Instead of raw bounding box coordinates, you’ll get a well-formatted listing of labels, bounding boxes, and confidence values. Good for quick debugging or demonstration.
 
-Automatically capture and save a screenshot when a target object is detected. This feature is useful for logging and reviewing detections, providing a visual record of the events.
+8.9 MULTI-WEBCAM SUPPORT:
+Spin up multiple threads to handle multiple cameras simultaneously, each with independent detection. This proves invaluable in surveillance contexts (monitoring multiple areas at once) or advanced research setups requiring multiple viewpoints.
 
-### Logging Detections
+8.10 VIDEO RECORDING:
+Specify conditions under which YOFLO-CLI starts/stops recording. If “record=od,” the system records whenever an object is detected; if “record=infy,” it records when inference is yes and stops on no, etc. This feature conserves space by only saving relevant footage.
 
-Log detection events to a file. This creates a persistent record of detection events, which is useful for auditing, analysis, and troubleshooting. Detection events will be logged to a file named `alerts.log`.
+8.11 MODEL DOWNLOAD:
+Rather than manually acquiring the Florence-2 model, you can instruct YOFLO-CLI to pull it straight from the Hugging Face Hub with -dm, drastically simplifying the setup process.
 
-### Headless Mode
 
-Run the tool without displaying the video feed, suitable for server environments or automated systems where a display is not necessary. This mode is useful for running on servers or in background processes. Enabling this mode should result in an ~20% increase in inference speed.
+9. HOW IT WORKS UNDER THE HOOD
+------------------------------
+YOFLO-CLI orchestrates concurrency across multiple camera streams, feeding frames to the Florence-2 model. Florence-2, being a large vision-language transformer, is invoked for either bounding box generation (object detection) or textual question answering (yes/no inferences). The tool aggregates these outputs, logs relevant events, and optionally triggers recording or screenshots. Communication between threads is carefully managed, ensuring no frame backlog or concurrency conflicts degrade performance.
 
-### Pretty Print
 
-Enable formatted output of detections for better readability. This makes it easier to interpret the results, especially when monitoring the output in real-time.
+10. USE CASES & APPLICATION SCENARIOS
+-------------------------------------
+- Security & Surveillance: Monitor multiple cameras in real time, automatically record or capture screenshots when suspicious objects or behaviors are detected.
+- Research & Development: Perform quick experiments on vision-language tasks, create custom inference chains for more advanced scenario testing, or gather data for training other models.
+- Content Creation: Live streaming with an overlay of recognized objects or yes/no Q&A prompts.
+- Industrial Automation: Check production lines for anomalies or worker compliance with safety protocols, triggered by real-time detection and multi-step inference.
 
-### Model Download
 
-Option to download the Florence-2 model directly from the Hugging Face Hub. This simplifies the setup process by automating the model download and initialization.
+11. FULL INSTALLATION GUIDE
+---------------------------
+11.1 INSTALLATION FROM SOURCE:
+1) Clone the repository to your local machine.
+2) Navigate into the project directory.
+3) Run pip install . from within that directory.
+4) Confirm installation by typing yoflo.py --help.
 
-### Multi-Webcam Support
+11.2 INSTALLATION FROM PYPI:
+1) Run pip install yoflo in your terminal or command prompt.
+2) Check success with yoflo.py --help or simply python -m yoflo --help, if using a module-based invocation.
 
-Support for multiple webcams, allowing concurrent processing and inference on multiple video feeds. This is useful for surveillance systems, multi-view analysis, and other applications requiring inputs from several cameras.
 
-### Video Recording
+12. SYSTEM REQUIREMENTS & ENVIRONMENT SETUP
+-------------------------------------------
+12.1 OPERATING SYSTEM:
+- Ubuntu 22.04 recommended for maximum compatibility.
+- Windows 11 support exists but can demand additional steps (drivers, environment variables, etc.).
 
-Added video recording functionality with conditions to trigger recording based on object detection and inference results. This feature allows capturing video segments of interest for further analysis or documentation.
+12.2 GPU / CUDA:
+- GPU recommended for real-time operation. The official minimum is 16 GB VRAM for stable performance at reasonable inference rates.
+- CUDA 12.1 or later is preferred. Make sure your GPU driver is up to date.
 
-## Model Information
+12.3 PYTHON VERSION:
+- Python 3.10 is tested and required. Older versions risk missing language or library features.
 
-This tool uses Microsoft's Florence-2, a powerful vision-language model designed to understand and generate detailed descriptions of visual inputs. Florence-2 combines advanced image processing with natural language understanding, making it ideal for complex tasks that require both visual and textual analysis. Florence-2 uses a unified sequence-to-sequence architecture to handle tasks from image-level understanding to fine-grained visual-semantic alignment. The model is trained on a large-scale, high-quality multitask dataset FLD-5B, which includes 126M images and billions of text annotations.
+12.4 DEPENDENCIES & ENVIRONMENT VARIABLES:
+- Key libraries: torch, transformers>=4.38.0, Pillow, numpy, opencv-python, huggingface-hub, datasets, flash-attn.
+- For GPU usage, ensure:
+   export CUDA_HOME=/usr/local/cuda
+   export PATH=$CUDA_HOME/bin:$PATH
+   export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
 
-## Installation
 
-### From Source
+13. COMPLETE USAGE INSTRUCTIONS
+-------------------------------
+13.1 PRIMARY COMMAND-LINE FLAGS:
+- -mp: Path to the locally saved Florence-2 model.
+- -od: Activates object detection; optional class filters.
+- -ph: Single yes/no question for real-time evaluation.
+- -hl: Runs in console-only mode with no display windows.
+- -ss: Captures frame screenshots on detection.
+- -lf: Enables appending detection events to alerts.log.
+- -is: Logs inferences/sec.
+- -dm: Automates model download from Hugging Face.
 
-1. Clone the repository:
-    ```sh
-    git clone https://github.com/CharlesCNorton/yoflo-cli.git
-    cd yoflo-cli
-    ```
+13.2 ADVANCED COMMAND-LINE FLAGS:
+- -pp: Produces visually pleasing detection logs.
+- -ic: Evaluates multiple yes/no queries in one pass.
+- -il: Restricts max inferences per second.
+- -wi: Allows specifying multiple local webcam indices.
+- -rtsp: Use RTSP streams instead of local cameras.
+- -r: “od” for object detection triggers, “infy” or “infn” for yes/no-based triggers.
 
-2. Install the package:
-    ```sh
-    pip install .
-    ```
+13.3 EXAMPLE COMMANDS:
+1) Basic Object Detection (all classes):
+   python yoflo.py -mp /path/to/Florence-2 -od
 
-### From PyPI
+2) Binary Inference:
+   python yoflo.py -mp /path/to/Florence-2 -ph "Is the person smiling?"
 
-You can also install YOFLO-CLI directly from PyPI:
-```sh
-pip install yoflo
-```
+3) Inference Chain:
+   python yoflo.py -mp /path/to/Florence-2 -ic "Is there a computer?" "Is the monitor on?"
 
-## Usage
+4) Headless Operation:
+   python yoflo.py -mp /path/to/Florence-2 -od "person" -hl
 
-Run the script with the desired arguments. Below are the available flags and their descriptions:
+5) Screenshot on Detection:
+   python yoflo.py -mp /path/to/Florence-2 -od "cat" -ss
 
-### Flags
+6) Logging to File:
+   python yoflo.py -mp /path/to/Florence-2 -od "dog" -lf
 
-- `-mp`, `--model_path`: Path to the pre-trained model directory. Specify the directory where the Florence-2 model is located. This flag is mandatory if the model is not being downloaded.
-- `-od`, `--object_detection`: Enable object detection. Optionally, you can specify class names to detect (e.g., `"cat"`, `"dog"`). If no class names are provided, all detections will be displayed.
-- `-ph`, `--phrase`: Enable binary inference with a yes/no question based on the visual input. For example, "Is the person smiling?". This flag initiates the expression comprehension feature of the tool.
-- `-hl`, `--headless`: Run in headless mode without displaying the video feed. This mode is useful for server environments or situations where a display is not available or necessary.
-- `-ss`, `--screenshot`: Enable screenshot on detection. When a target object is detected, a screenshot will be automatically captured and saved with a timestamped filename.
-- `-lf`, `--log_to_file`: Enable logging of detection events to a file. Detection events will be logged to a file named `alerts.log`, creating a persistent record of detection events.
-- `-is`, `--display_inference_speed`: Display inference speed. This flag logs the rate of inferences per second, providing insight into the performance of the detection process.
-- `-dm`, `--download_model`: Download the Florence-2 model from the Hugging Face Hub. This option can be used to download and initialize the model if it is not already available locally.
-- `-pp`, `--pretty_print`: Enable pretty print for detections. This flag formats the output of detections for better readability, making it easier to interpret the results.
-- `-il`, `--inference_limit`: Limit the inference rate to a specified number of inferences per second. This can help manage performance and ensure the system is not overloaded, providing a smoother operation.
-- `-ic`, `--inference_chain`: Enable inference chain with specified phrases. Provide phrases in quotes, separated by spaces (e.g., `"Is it sunny?" "Is it raining?"`).
-- `-wi`, `--webcam_indices`: Specify the indices of the webcams to use (e.g., `0 1 2`). If not provided, the first webcam (index 0) will be used by default.
-- `-rtsp`, `--rtsp_urls`: Specify the RTSP URLs for the video streams.
-- `-r`, `--record`: Enable video recording and specify the recording mode: 'od' to start/stop based on object detection, 'infy' to start on 'yes' inference and stop on 'no', and 'infn' to start on 'no' inference and stop on 'yes'.
+7) Video Recording Triggered by Inference:
+   python yoflo.py -mp /path/to/Florence-2 -ph "Is the door open?" -r infy
 
-## Inference Chain Feature
+8) Multi-Webcam:
+   python yoflo.py -mp /path/to/Florence-2 -wi 0 1 -od "car"
 
-### Overview
 
-The inference chain feature allows you to evaluate multiple inferences and determine an overall result based on a sequence of phrases. This capability leverages the power of the Florence-2 model to handle more complex logic that requires analyzing multiple aspects of the visual input.
+14. INFERENCE CHAIN & COMPLEX LOGIC
+-----------------------------------
+14.1 WHY IT MATTERS:
+Single yes/no queries can be too simplistic for many real-world scenarios. Inference chains break down complex logic into a series of simpler checks. Users can easily craft multi-step constraints and combine them for a final pass/fail verdict.
 
-### Importance
+14.2 EXAMPLES:
+- “Is there a person?” “Is the person awake?” “Is the person wearing a security badge?” => If all are yes, we conclude the scenario is authorized.
+- “Is it raining?” “Is there an umbrella in use?” => Could indicate preparedness for adverse weather conditions.
 
-Vision-language models like Florence-2 examine each frame in isolation and can only answer simple, specific questions. By using an inference chain, you can string together multiple simple questions to examine more features and derive a more comprehensive understanding of the context. For example, asking the model if someone is sleeping isn't reliable just by the state of their eyelids; other context such as their posture or presence of a pillow is necessary.
 
-### Example Use Case
+15. PERFORMANCE TUNING & OPTIMIZATION
+-------------------------------------
+15.1 INFERENCE LIMIT:
+Useful on slower systems or when CPU resources are shared among multiple processes. Setting an inference limit of 3 means YOFLO-CLI will only attempt up to 3 inferences per second, preventing spiking CPU/GPU usage.
 
-Imagine you want to determine if a person is working. This might involve checking several conditions:
+15.2 HEADLESS MODE:
+Eliminates GUI overhead, speeding up frame handling by 20% or more in many environments.
 
-1. Is the person sitting?
-2. Is the person typing?
-3. Is the person awake?
+15.3 MULTI-THREADED OPERATIONS:
+Each camera feed has its own thread, maximizing concurrency. However, be mindful of the GPU load if using many streams concurrently.
 
-The inference chain feature allows you to evaluate multiple inferences and determine an overall result based on a sequence of phrases. By setting up an inference chain with these phrases, the system can evaluate each condition separately and provide an overall result based on the combined outcomes. This capability leverages the power of YO-FLO to process more complex logic than Florence-2 could on its own.
+15.4 GPU OPTIMIZATIONS:
+Ensure you are using a modern GPU driver and a compatible CUDA installation. For best results, close other GPU-intensive tasks during operation.
 
-### How to Use
 
-To use the inference chain feature, specify the `--inference_chain` flag followed by the phrases you want to evaluate. Each phrase should be enclosed in quotes and separated by spaces.
+16. TROUBLESHOOTING
+-------------------
+16.1 COMMON ERRORS:
+- “Model not found” => Check the path or confirm successful download.
+- “No suitable webcam device” => Ensure you have the correct webcam index or RTSP URL.
 
-#### Command Example:
-```sh
-python yoflo.py --model_path /path/to/Florence-2-base-ft --inference_chain "Is the person wearing glasses?" "Is the person wearing headphones?" "Is the person smiling?" --headless --display_inference_speed
-```
-
-## Example Commands
-
-### Object Detection for Specific Classes
-To perform object detection and only display detections for specific classes such as `"person"`:
-```sh
-python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person"
-```
-
-### Binary Inference (e.g., "Is the person smiling?")
-To perform binary inference based on a yes/no question related to the visual input:
-```sh
-python yoflo.py --model_path /path/to/Florence-2-base-ft --phrase "Is the person smiling?"
-```
-
-### Inference Chain
-To perform a sequence of inferences and determine overall results:
-```sh
-python yoflo.py --model_path /path/to/Florence-2-base-ft --inference_chain "Is the person wearing glasses?" "Is the
-
- person wearing headphones?" "Is the person smiling?" --headless --display_inference_speed
-```
+16.2 MODEL LOADING ISSUES:
+- OSError or permission errors may indicate no read permissions on the model folder. Verify your file paths and user privileges.
 
-### Headless Mode
-To run the tool in headless mode without displaying the video feed:
-```sh
-python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --headless
-```
+16.3 CAMERA / VIDEO FEED PROBLEMS:
+- Confirm the index is valid (e.g. on Linux, /dev/video0 is typically index 0).
+- For RTSP, verify the network connection or correct URL format (rtsp://...).
 
-### Enable Screenshot on Detection
-To enable screenshot capture whenever a target object is detected:
-```sh
-python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --screenshot
-```
+16.4 SLOW PERFORMANCE:
+- Switch to headless mode, reduce inference_limit, or close other GPU processes. Check that you have enough VRAM free.
 
-### Enable Logging of Detection Events to File
-To log detection events to a file named `alerts.log`:
-```sh
-python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --log_to_file
-```
 
-### Display Inference Speed
-To log and display the inference speed (inferences per second):
-```sh
-python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --display_inference_speed
-```
+17. FREQUENTLY ASKED QUESTIONS (FAQ)
+------------------------------------
+17.1 CAN I USE A DIFFERENT MODEL?
+Currently, YOFLO-CLI is tightly integrated with Florence-2. Future versions may add support for custom HF Transformers.
 
-### Download Model from Hugging Face
-To download the Florence-2 model from the Hugging Face Hub:
-```sh
-python yoflo.py --download_model
-```
+17.2 WILL THIS WORK WITHOUT A GPU?
+Yes, but real-time performance will be severely limited. CPU-only mode is viable for testing, not recommended for production.
 
-### Pretty Print Detections
-To enable formatted output of detections for better readability:
-```sh
-python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --pretty_print
-```
+17.3 HOW DO I RUN MULTIPLE INSTANCES AT ONCE?
+Each instance must target separate cameras or streams. Be mindful of system resource constraints if running them in parallel on the same GPU.
 
-### Limit Inference Rate
-To limit the inference rate to a specified number of inferences per second, for example, 5 inferences per second:
-```sh
-python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --inference_limit 5
-```
+17.4 DOES HEADLESS MODE AFFECT ACCURACY?
+No. The removal of the GUI output has zero impact on detection or inference accuracy. It purely saves CPU/GPU cycles that would have been spent rendering.
 
-### Use Multiple Webcams
-To use multiple webcams for object detection or inference:
-```sh
-python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --webcam_indices 0 1 --inference_limit 3
-```
 
-### Video Recording
-To enable video recording based on object detection or inference results:
-```sh
-python yoflo.py --model_path /path/to/Florence-2-base-ft --object_detection "person" --record od
-```
+18. CONTRIBUTING & COMMUNITY
+----------------------------
+We welcome contributions and user feedback. Submit issues, pull requests, or general suggestions on our GitHub repository. All code changes should include relevant tests or usage examples where possible. Our community fosters collaboration, encouraging open dialogue, bug reporting, and performance benchmarking.
 
-## Minimum Requirements for Running YOFLO
 
-1. **Operating System**:
-   - **Ubuntu 22.04** (or compatible Linux distribution)
-   - **Windows 11** (Takes a lot of work, but it can be done!)
+19. LICENSE
+----------
+YOFLO-CLI is released under the MIT License, granting you broad rights to modify and distribute the software. Refer to the LICENSE file for the entire legal text.
 
-2. **Minimum Hardware**:
-   - **CPU**: Intel Core i7
-   - **GPU**:  16 GB VRAM
-   - **RAM**:  32 GB RAM
-   - **Camera**: USB camera connected
 
-3. **Python Version**:
-   - **Python 3.10**
+20. ACKNOWLEDGMENTS
+-------------------
+- Microsoft for developing Florence-2 and releasing it on the Hugging Face Model Hub.
+- Contributors to open-source libraries such as PyTorch, Transformers, OpenCV, Pillow, and NumPy, which collectively enable YOFLO-CLI’s functionality.
+- Everyone who tested earlier beta builds, providing invaluable feedback and bug reports.
 
-4. **CUDA Version**:
-   - **CUDA 12.1** 
 
-5. **Environment Variables**:
-   - Set the following in your `~/.bashrc` or equivalent:
-     ```bash
-     export CUDA_HOME=/usr/local/cuda
-     export PATH=$CUDA_HOME/bin:$PATH
-     export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
-     source ~/.bashrc
-     ```
+21. FUTURE DIRECTIONS
+---------------------
+- Expanded PTZ Camera Control: Possibly integrate pan/tilt/zoom logic into YOFLO-CLI for automated object tracking.
+- Advanced Alerting: Beyond logging, implement email or webhook alerts on custom triggers.
+- Hybrid Models: Allow seamlessly switching between Florence-2 and other HF Transformers to handle specialized tasks.
+- Deployment Tooling: Docker containers, Helm charts, or serverless wrappers for enterprise-scale rollouts.
 
-6. **Required Python Packages**:
-   - `torch`
-   - `transformers>=4.38.0`
-   - `Pillow`
-   - `numpy`
-   - `opencv-python`
-   - `huggingface-hub`
-   - `datasets`
-   - `flash-attn`
 
-## Development Status
-
-YOFLO-CLI has been successfully converted into a full Python package and is available on PyPI. The package currently supports object detection, binary inference based on referring expression comprehension, as well as inference trees consisting of multiple phrases. Future updates will focus on optimizations and adding new features as the project evolves.
-
-## Contributing
-
-Contributions are welcome! Please fork the repository and submit a pull request with your changes. Make sure to follow the existing code style and add tests for any new features or bug fixes.
-
-## License
-
-This project is licensed under the MIT License.
-
-## Acknowledgments
-
-- The Florence-2 model is developed by Microsoft and is available on the Hugging Face Model Hub.
-- This project uses several open-source libraries, including PyTorch, Transformers, OpenCV, Pillow, and NumPy.
+22. CONCLUSION
+-------------
+YOFLO-CLI v1.0.0 ushers in a new era of unified computer vision and language reasoning. By pairing real-time object detection, yes/no inference, multi-step logic, logging, screenshots, and conditional video recording, it operates as a universal toolkit. We encourage users to explore the wide range of functionalities, experiment with advanced chain logic, and contribute new features or improvements. Thank you for choosing YOFLO-CLI as your vision-language command-line solution out of beta. We hope it meets all your demanding real-time analysis needs.

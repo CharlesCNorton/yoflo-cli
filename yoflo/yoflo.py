@@ -1,30 +1,42 @@
-import argparse
-from datetime import datetime
-import logging
-import os
-import threading
-import time
-import cv2
-import torch
-from huggingface_hub import snapshot_download
-from PIL import Image
-from transformers import AutoProcessor, AutoModelForCausalLM
-from transformers import BitsAndBytesConfig
-import sys
-import hid
-import msvcrt
+import argparse  # Library for command-line option parsing
+from datetime import datetime  # Library to handle date and time objects
+import logging  # Library for logging system
+import os  # Library for interacting with the operating system
+import threading  # Library for concurrent threads
+import time  # Library to handle time-related functions
+import cv2  # OpenCV for computer vision
+import torch  # PyTorch for machine learning model operations
+from huggingface_hub import snapshot_download  # To download models from Hugging Face
+from PIL import Image  # Pillow library for image manipulation
+from transformers import AutoProcessor, AutoModelForCausalLM  # HF Transformers: model + processor
+from transformers import BitsAndBytesConfig  # HF Transformers quantization config
+import sys  # System-specific parameters and functions
+import hid  # Library for accessing HID devices
+import msvcrt  # Windows-specific console keyboard reading
 
 def setup_logging(log_to_file, log_file_path="alerts.log"):
+    """
+    Sets up the logging configuration for the entire application.
+    If log_to_file is True, messages will also be written to a specified file.
+
+    :param log_to_file: Boolean indicating whether to also log to a file.
+    :param log_file_path: The path where the log file will be written.
+    """
     handlers = [logging.StreamHandler()]
     if log_to_file:
         handlers.append(logging.FileHandler(log_file_path))
     logging.basicConfig(level=logging.INFO, format="%(message)s", handlers=handlers)
 
-
 class PTZTracker:
     """
     Autonomous PTZ tracking class. Keeps a specified object centered and at a desired size.
+
+    This class adjusts camera pan, tilt, and zoom automatically to keep
+    the detected object within a certain bounding box ratio, or "zoom level."
+    It smooths the bounding box width and height to reduce jitter and only
+    sends commands at certain intervals to prevent overwhelming the PTZ camera.
     """
+
     def __init__(self, camera,
                  desired_ratio=0.20,
                  zoom_tolerance=0.4,
@@ -33,6 +45,18 @@ class PTZTracker:
                  zoom_interval=0.5,
                  smoothing_factor=0.2,
                  max_consecutive_errors=5):
+        """
+        Initializes the PTZTracker with various parameters controlling behavior.
+
+        :param camera: A camera object that supports PTZ commands.
+        :param desired_ratio: Desired fraction of the frame the object should occupy.
+        :param zoom_tolerance: The tolerance around the desired_ratio before zooming in/out.
+        :param pan_tilt_tolerance: Pixel difference from center before panning/tilting.
+        :param pan_tilt_interval: Minimum time (in seconds) between pan/tilt commands.
+        :param zoom_interval: Minimum time (in seconds) between zoom commands.
+        :param smoothing_factor: Weight for exponential smoothing of bounding box size.
+        :param max_consecutive_errors: Maximum camera command errors before deactivation.
+        """
         if not (0 < smoothing_factor < 1):
             raise ValueError("smoothing_factor must be between 0 and 1.")
         if desired_ratio <= 0 or desired_ratio >= 1:
@@ -63,6 +87,11 @@ class PTZTracker:
         self.consecutive_errors = 0
 
     def activate(self, active=True):
+        """
+        Activate or deactivate PTZ tracking. When deactivated, tracking resets smoothing and error counters.
+
+        :param active: Boolean indicating whether tracking should be active.
+        """
         self.active = active
         if not active:
             self.smoothed_width = None
@@ -70,6 +99,13 @@ class PTZTracker:
             self.consecutive_errors = 0
 
     def adjust_camera(self, bbox, frame_width, frame_height):
+        """
+        Adjusts camera pan, tilt, and zoom to keep the object bounding box centered and sized per desired_ratio.
+
+        :param bbox: A tuple (x1, y1, x2, y2) representing the object bounding box coordinates.
+        :param frame_width: The width of the current frame in pixels.
+        :param frame_height: The height of the current frame in pixels.
+        """
         if not self.active:
             return
 
@@ -112,7 +148,6 @@ class PTZTracker:
             pan_tilt_moved = False
             if abs(dx) > self.pan_tilt_tolerance:
                 pan_tilt_moved = self._safe_camera_command('pan_left' if dx < 0 else 'pan_right') or pan_tilt_moved
-
             if abs(dy) > self.pan_tilt_tolerance:
                 pan_tilt_moved = self._safe_camera_command('tilt_up' if dy < 0 else 'tilt_down') or pan_tilt_moved
 
@@ -139,6 +174,12 @@ class PTZTracker:
             self.activate(False)
 
     def _safe_camera_command(self, command):
+        """
+        Safely invokes a camera command, handling exceptions and counting errors.
+
+        :param command: A string specifying the method name to call on the camera.
+        :return: Boolean indicating whether the command executed successfully.
+        """
         if not hasattr(self.camera, command):
             print(f"Camera does not support command '{command}'.")
             return False
@@ -152,15 +193,31 @@ class PTZTracker:
             print(f"Error executing camera command '{command}': {e}")
             return False
 
-
 class ModelManager:
+    """
+    Class responsible for loading and managing a Hugging Face Transformer model and processor,
+    with optional quantization settings.
+    """
+
     def __init__(self, device, quantization=None):
+        """
+        Initialize the ModelManager with a torch device and an optional quantization setting.
+
+        :param device: Torch device, e.g., 'cuda' or 'cpu'.
+        :param quantization: A string (e.g., "4bit") indicating which quantization scheme to apply.
+        """
         self.device = device
         self.model = None
         self.processor = None
         self.quantization = quantization
 
     def load_local_model(self, model_path):
+        """
+        Loads a local model from the specified directory path. Optionally applies quantization.
+
+        :param model_path: Filesystem path to the local pre-trained model directory.
+        :return: Boolean indicating whether the model was successfully loaded.
+        """
         if not os.path.exists(model_path):
             logging.error(f"Model path {os.path.abspath(model_path)} does not exist.")
             return False
@@ -170,12 +227,12 @@ class ModelManager:
 
         try:
             logging.info(f"Attempting to load model from {os.path.abspath(model_path)}")
-            quantization_config = self._get_quant_config()
+            quant_config = self._get_quant_config()
 
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_path,
                 trust_remote_code=True,
-                quantization_config=quantization_config,
+                quantization_config=quant_config,
             ).eval()
 
             if not self.quantization:
@@ -183,6 +240,7 @@ class ModelManager:
                 if torch.cuda.is_available():
                     self.model = self.model.half()
                     logging.info("Using FP16 precision for the model.")
+
             self.processor = AutoProcessor.from_pretrained(
                 model_path, trust_remote_code=True
             )
@@ -195,6 +253,12 @@ class ModelManager:
         return False
 
     def download_and_load_model(self, repo_id="microsoft/Florence-2-base-ft"):
+        """
+        Downloads a model from the Hugging Face Hub using its repository ID, then loads it locally.
+
+        :param repo_id: The Hugging Face model repository ID to download from.
+        :return: Boolean indicating whether the model was successfully downloaded and loaded.
+        """
         try:
             local_model_dir = "model"
             snapshot_download(repo_id=repo_id, local_dir=local_model_dir)
@@ -222,9 +286,20 @@ class ModelManager:
             )
         return None
 
-
 class RecordingManager:
+    """
+    Class that manages video recording. Can record continuously or by detection/inference triggers.
+    """
+
     def __init__(self, record_mode=None):
+        """
+        Initializes the recording manager with a specified mode.
+
+        :param record_mode: The mode for starting/stopping recording:
+            None - no recording,
+            "od" - based on object detections,
+            "infy"/"infn" - based on inference results (yes/no).
+        """
         self.record_mode = record_mode
         self.recording = False
         self.video_writer = None
@@ -232,6 +307,11 @@ class RecordingManager:
         self.last_detection_time = time.time()
 
     def start_recording(self, frame):
+        """
+        Starts video recording given an initial frame (to set up dimensions, codec, etc.).
+
+        :param frame: An OpenCV image frame used to determine recording dimensions and color format.
+        """
         if not self.recording and self.record_mode:
             height, width, _ = frame.shape
             self.video_writer = cv2.VideoWriter(
@@ -244,16 +324,30 @@ class RecordingManager:
             logging.info(f"Started recording video: {self.video_out_path}")
 
     def stop_recording(self):
+        """
+        Stops video recording and releases the VideoWriter resource.
+        """
         if self.recording:
             self.video_writer.release()
             self.recording = False
             logging.info(f"Stopped recording video: {self.video_out_path}")
 
     def write_frame(self, frame):
+        """
+        Writes a single frame to the open video file if currently recording.
+
+        :param frame: The OpenCV image frame to be written to the video.
+        """
         if self.recording and self.video_writer:
             self.video_writer.write(frame)
 
     def handle_recording_by_detection(self, detections, frame):
+        """
+        Starts or stops recording based on whether object detections are present.
+
+        :param detections: A list of detections, each of which is typically (bbox, label).
+        :param frame: The current OpenCV image frame.
+        """
         if not self.record_mode:
             return
         current_time = time.time()
@@ -266,6 +360,12 @@ class RecordingManager:
                 logging.info("Recording stopped due to no detection for 1+ second.")
 
     def handle_recording_by_inference(self, inference_result, frame):
+        """
+        Starts or stops recording based on inference (yes/no) results.
+
+        :param inference_result: A string, typically "yes" or "no" from some model inference.
+        :param frame: The current OpenCV image frame.
+        """
         if self.record_mode == "infy" and inference_result == "yes":
             self.start_recording(frame)
         elif self.record_mode == "infy" and inference_result == "no":
@@ -275,10 +375,20 @@ class RecordingManager:
         elif self.record_mode == "infn" and inference_result == "yes":
             self.stop_recording()
 
-
 class ImageUtils:
+    """
+    Utility class for image-related operations such as drawing bounding boxes and saving screenshots.
+    """
+
     @staticmethod
     def plot_bbox(image, detections):
+        """
+        Draws bounding boxes and labels on an image using OpenCV.
+
+        :param image: The OpenCV image (numpy array).
+        :param detections: A list of (bbox, label) tuples, where bbox=(x1, y1, x2, y2).
+        :return: The image with bounding boxes drawn.
+        """
         try:
             for bbox, label in detections:
                 x1, y1, x2, y2 = map(int, bbox)
@@ -301,6 +411,11 @@ class ImageUtils:
 
     @staticmethod
     def save_screenshot(frame):
+        """
+        Saves a screenshot of the current frame with a timestamped filename.
+
+        :param frame: The OpenCV image (numpy array) to save.
+        """
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"screenshot_{timestamp}.png"
@@ -314,10 +429,18 @@ class ImageUtils:
             logging.error(f"Error saving screenshot: {e}")
             print(f"[{datetime.now().strftime('%Y%m%d_%H%M%S')}] Error saving screenshot: {e}")
 
-
 class AlertLogger:
+    """
+    A simple class to log alerts both to a dedicated file (alerts.log) and to the console.
+    """
+
     @staticmethod
     def log_alert(message):
+        """
+        Appends an alert message to a log file with a timestamp, and also prints to console.
+
+        :param message: The alert message to be logged.
+        """
         try:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
             with open("alerts.log", "a") as log_file:
@@ -331,10 +454,21 @@ class AlertLogger:
             logging.error(f"Error logging alert: {e}")
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')}] Error logging alert: {e}")
 
-
 class PTZController:
-    """Class to control PTZ camera movements via HID commands."""
+    """
+    Class to control PTZ camera movements via HID commands.
+    It locates a suitable HID device for the PTZ camera based on given vendor and product IDs.
+    """
+
     def __init__(self, vendor_id=0x046D, product_id=0x085F, usage_page=65280, usage=1):
+        """
+        Initializes the PTZController by attempting to open a HID device matching the given parameters.
+
+        :param vendor_id: The USB vendor ID of the PTZ device.
+        :param product_id: The USB product ID of the PTZ device.
+        :param usage_page: The HID usage page number.
+        :param usage: The HID usage number.
+        """
         self.device = None
         try:
             ptz_path = None
@@ -354,6 +488,12 @@ class PTZController:
             print(f"Unexpected error during PTZ device initialization: {e}")
 
     def send_command(self, report_id, value):
+        """
+        Sends a command to the PTZ device via HID write.
+
+        :param report_id: The report ID for the PTZ control.
+        :param value: The value that represents the specific command (e.g., pan left/right, tilt up/down).
+        """
         if not self.device:
             print("PTZ Device not initialized.")
             return
@@ -368,24 +508,33 @@ class PTZController:
             print(f"Unexpected error sending PTZ command: {e}")
 
     def pan_right(self):
+        """Pans the camera to the right."""
         self.send_command(0x0B, 0x02)
 
     def pan_left(self):
+        """Pans the camera to the left."""
         self.send_command(0x0B, 0x03)
 
     def tilt_up(self):
+        """Tilts the camera upward."""
         self.send_command(0x0B, 0x00)
 
     def tilt_down(self):
+        """Tilts the camera downward."""
         self.send_command(0x0B, 0x01)
 
     def zoom_in(self):
+        """Zooms the camera in."""
         self.send_command(0x0B, 0x04)
 
     def zoom_out(self):
+        """Zooms the camera out."""
         self.send_command(0x0B, 0x05)
 
     def close(self):
+        """
+        Closes the HID device handle, if open, to release system resources.
+        """
         if self.device:
             try:
                 self.device.close()
@@ -393,8 +542,12 @@ class PTZController:
             except Exception as e:
                 print(f"Error closing PTZ device: {e}")
 
-
 class YOFLO:
+    """
+    Main class to run object detection and/or expression comprehension using a loaded model.
+    Handles webcam or RTSP streams, optional PTZ tracking, screenshot capturing, logging, and more.
+    """
+
     def __init__(
         self,
         model_path=None,
@@ -409,6 +562,21 @@ class YOFLO:
         ptz_tracker=None,
         track_object_name=None
     ):
+        """
+        Initializes the YOFLO system with various configuration options.
+
+        :param model_path: Local filesystem path to the pre-trained model directory, if not downloading.
+        :param display_inference_rate: If True, logs the inference rate (inferences per second).
+        :param pretty_print: If True, logs detections in a 'pretty' format with boundaries.
+        :param inference_limit: Numeric limit on how many inferences can be made per second.
+        :param class_names: Optional list of class names for filtering object detections.
+        :param webcam_indices: List of integer indices for local webcams to open.
+        :param rtsp_urls: List of RTSP URLs for network stream sources.
+        :param record: Recording mode ("od", "infy", "infn", or None).
+        :param quantization: Quantization mode ("4bit" or None).
+        :param ptz_tracker: Optional PTZTracker object for autonomous camera movement.
+        :param track_object_name: The name of the object class to track using PTZ, if ptz_tracker is active.
+        """
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.inference_start_time = None
         self.inference_count = 0
@@ -418,6 +586,7 @@ class YOFLO:
         self.screenshot_active = False
         self.log_to_file_active = False
         self.headless = True
+
         self.display_inference_rate = display_inference_rate
         self.stop_webcam_flag = threading.Event()
         self.webcam_threads = []
@@ -463,13 +632,11 @@ class YOFLO:
         try:
             task_prompt = "<OD>"
             inputs = self.processor(text=task_prompt, images=image, return_tensors="pt")
-
             dtype = next(self.model.parameters()).dtype
             inputs = {
                 k: v.to(self.device, dtype=dtype) if torch.is_floating_point(v) else v
                 for k, v in inputs.items()
             }
-
             with torch.no_grad():
                 generated_ids = self.model.generate(
                     input_ids=inputs["input_ids"].to(self.device),
@@ -547,14 +714,18 @@ class YOFLO:
             logging.error(f"Error in pretty_print_detections: {e}")
 
     def pretty_print_expression(self, clean_result):
+        """
+        Prints expression comprehension results in a nicely formatted block
+        rather than just raw text. This helps if the model outputs tokens like
+        '</s><s>yes</s>' which we can clean up or highlight.
+        """
         try:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            if self.pretty_print:
-                logging.info("\n" + "=" * 50)
-                logging.info(f"Expression Comprehension: {clean_result} at {timestamp}")
-                logging.info("=" * 50 + "\n")
-            else:
-                logging.info(f"Expression Comprehension: {clean_result} at {timestamp}")
+            tidy_result = clean_result.replace("</s>", "").replace("<s>", "").strip()
+
+            logging.info("\n" + "=" * 50)
+            logging.info(f"Expression Comprehension: {tidy_result} at {timestamp}")
+            logging.info("=" * 50 + "\n")
         except Exception as e:
             logging.error(f"Error in pretty_print_expression: {e}")
 
@@ -666,21 +837,18 @@ class YOFLO:
     def _pick_tracked_object(self, detections):
         if not self.track_object_name:
             return None
-
         candidate_detections = [(bbox, label) for bbox, label in detections
                                 if label.lower() == self.track_object_name.lower()]
-
         if not candidate_detections:
             return None
-
         def bbox_area(bbox):
             return (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
-
         largest_bbox = max(candidate_detections, key=lambda x: bbox_area(x[0]))[0]
         return largest_bbox
 
     def _process_frame(self, frame, image_pil, source):
         primary_bbox = None
+
         if self.object_detection_active:
             results = self.run_object_detection(image_pil)
             if results and "<OD>" in results:
@@ -699,7 +867,6 @@ class YOFLO:
 
                 if not self.headless:
                     frame = ImageUtils.plot_bbox(frame, filtered_detections)
-
                 self.inference_count += 1
                 self.update_inference_rate()
 
@@ -710,17 +877,38 @@ class YOFLO:
                         AlertLogger.log_alert(f"Detections from source {source}: {filtered_detections}")
 
                 self.recording_manager.handle_recording_by_detection(filtered_detections, frame)
-
                 if self.ptz_tracker and self.ptz_tracker.active:
                     primary_bbox = self._pick_tracked_object(filtered_detections)
 
-        elif self.phrase:
-            pass
+        if self.phrase:
+            results = self.run_expression_comprehension(image_pil, self.phrase)
+            if results:
+                clean_result = results.lower()
+
+                if self.pretty_print:
+                    self.pretty_print_expression(clean_result)
+                else:
+                    logging.info(f"Single phrase inference from source {source}: {clean_result}")
+                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Single-phrase result: {clean_result}")
+                self.inference_count += 1
+                self.update_inference_rate()
+
+                if "yes" in clean_result:
+                    if self.log_to_file_active:
+                        AlertLogger.log_alert(f"Expression from source {source}: yes")
+                    if self.record:
+                        self.recording_manager.handle_recording_by_inference("yes", frame)
+                elif "no" in clean_result:
+                    if self.log_to_file_active:
+                        AlertLogger.log_alert(f"Expression from source {source}: no")
+                    if self.record:
+                        self.recording_manager.handle_recording_by_inference("no", frame)
 
         if self.inference_phrases:
             inference_result, phrase_results = self.evaluate_inference_chain(image_pil)
             logging.info(f"Inference Chain result from source {source}: {inference_result}, Details: {phrase_results}")
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Inference Chain result from source {source}: {inference_result}, Details: {phrase_results}")
+
             if self.pretty_print:
                 for idx, result in enumerate(phrase_results):
                     logging.info(f"Inference {idx + 1} from source {source}: {'PASS' if result else 'FAIL'}")
@@ -732,8 +920,12 @@ class YOFLO:
             frame_height, frame_width, _ = frame.shape
             self.ptz_tracker.adjust_camera(primary_bbox, frame_width, frame_height)
 
-
 def ptz_control_thread(ptz_camera):
+    """
+    A simple thread function for interactive PTZ control using arrow keys and +/- zoom on Windows.
+
+    :param ptz_camera: A PTZController instance to control.
+    """
     print("PTZ control started. Use arrow keys to pan/tilt, +/- to zoom, q to quit.")
     while True:
         ch = msvcrt.getch()
@@ -756,8 +948,11 @@ def ptz_control_thread(ptz_camera):
             break
     ptz_camera.close()
 
-
 def main():
+    """
+    Main function to parse command-line arguments, configure and run the YO-FLO system,
+    including optional model download, PTZ camera setup, and webcam detection loops.
+    """
     parser = argparse.ArgumentParser(
         description="YO-FLO: A proof-of-concept vision-language model as a YOLO alternative."
     )
@@ -834,6 +1029,7 @@ def main():
         yo_flo.object_detection_active = args.od is not None
         yo_flo.screenshot_active = args.ss
         yo_flo.log_to_file_active = args.lf
+
         yo_flo.start_webcam_detection()
 
         ptz_thread = None
