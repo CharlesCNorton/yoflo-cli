@@ -10,3 +10,4 @@ flash-attn
 scipy
 timm
 hidapi
+yt_dlp
