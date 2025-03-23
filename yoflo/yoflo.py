@@ -1,29 +1,33 @@
 #!/usr/bin/env python3
-# YOFLO-CLI (v1.0.2)
+# YOFLO-CLI (v1.1.0)
+#
 # By: Charles C. Norton
 #
 # Main Python script providing advanced vision-language object detection,
 # yes/no inference, multi-step inference chaining, screenshot capture,
-# logging, and video recording. Now includes:
-#   - Conditional HID importing for PTZ (1.0.1)
-#   - Conditional msvcrt importing for Windows-only PTZ keyboard control (1.0.2)
+# logging, video recording, and now optional YouTube stream support.
+#
+# This version conditionally imports Windows-specific and hardware-specific libraries:
+#   - 'hid' for PTZ devices
+#   - 'msvcrt' for interactive PTZ keyboard control
+# and also includes a new function (get_youtube_live_url) for extracting .m3u8 streams
+# from YouTube links using yt-dlp.
 
 import argparse  # Library for command-line option parsing
 from datetime import datetime  # Library to handle date and time objects
 import logging  # Library for logging system
 import os  # Library for interacting with the operating system
-import sys  # System-specific parameters and functions
 import threading  # Library for concurrent threads
 import time  # Library to handle time-related functions
-
 import cv2  # OpenCV for computer vision
 import torch  # PyTorch for machine learning model operations
 from huggingface_hub import snapshot_download  # To download models from Hugging Face
 from PIL import Image  # Pillow library for image manipulation
 from transformers import AutoProcessor, AutoModelForCausalLM  # HF Transformers: model + processor
 from transformers import BitsAndBytesConfig  # HF Transformers quantization config
+import sys  # System-specific parameters and functions
 
-# >>> CONDITIONAL HID IMPORT <<<
+# Conditional import for PTZ HID usage:
 try:
     import hid  # Library for accessing HID devices
     HID_AVAILABLE = True
@@ -31,13 +35,22 @@ except ImportError:
     HID_AVAILABLE = False
     logging.warning("HID library not found. PTZ functionality disabled.")
 
-# >>> CONDITIONAL MSVCRT IMPORT (Windows only) <<<
+# Conditional import for Windows-specific console keyboard reading:
 if sys.platform == "win32":
-    import msvcrt  # Windows-specific console keyboard reading
+    import msvcrt
     MSVCRT_AVAILABLE = True
 else:
     MSVCRT_AVAILABLE = False
     logging.warning("msvcrt module is unavailable; interactive PTZ keyboard control disabled.")
+
+# Attempt to import yt_dlp for YouTube stream parsing:
+try:
+    import yt_dlp
+    YT_DLP_AVAILABLE = True
+except ImportError:
+    YT_DLP_AVAILABLE = False
+    logging.warning("yt-dlp not installed. YouTube stream handling disabled.")
+
 
 def setup_logging(log_to_file, log_file_path="alerts.log"):
     """
@@ -51,6 +64,34 @@ def setup_logging(log_to_file, log_file_path="alerts.log"):
     if log_to_file:
         handlers.append(logging.FileHandler(log_file_path))
     logging.basicConfig(level=logging.INFO, format="%(message)s", handlers=handlers)
+
+
+def get_youtube_live_url(youtube_url):
+    """
+    Uses yt-dlp to extract a direct video stream URL (often .m3u8) from a YouTube link.
+    Returns the extracted URL or None if extraction fails.
+    """
+    if not YT_DLP_AVAILABLE:
+        logging.error("yt-dlp is not installed. Cannot process YouTube streams.")
+        return None
+
+    # Attempt to extract a .m3u8 or best stream
+    ydl_opts = {
+        'format': 'best[ext=m3u8]/best',
+        'quiet': True,
+        'skip_download': True,
+        'simulate': True,
+        'forceurl': True
+    }
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info_dict = ydl.extract_info(youtube_url, download=False)
+        return info_dict.get('url', None)
+    except Exception as e:
+        logging.error(f"Error extracting YouTube stream URL: {e}")
+        return None
+
 
 class PTZTracker:
     """
@@ -125,8 +166,7 @@ class PTZTracker:
 
     def adjust_camera(self, bbox, frame_width, frame_height):
         """
-        Adjusts camera pan, tilt, and zoom to keep the object bounding box centered
-        and sized according to the desired_ratio.
+        Adjusts camera pan, tilt, and zoom to keep the object bounding box centered and sized per desired_ratio.
 
         :param bbox: A tuple (x1, y1, x2, y2) representing the object bounding box coordinates.
         :param frame_width: The width of the current frame in pixels.
@@ -147,14 +187,10 @@ class PTZTracker:
             self.smoothed_width = bbox_width
             self.smoothed_height = bbox_height
         else:
-            self.smoothed_width = (
-                self.smoothing_factor * bbox_width
-                + (1 - self.smoothing_factor) * self.smoothed_width
-            )
-            self.smoothed_height = (
-                self.smoothing_factor * bbox_height
-                + (1 - self.smoothing_factor) * self.smoothed_height
-            )
+            self.smoothed_width = (self.smoothing_factor * bbox_width
+                                   + (1 - self.smoothing_factor) * self.smoothed_width)
+            self.smoothed_height = (self.smoothing_factor * bbox_height
+                                    + (1 - self.smoothing_factor) * self.smoothed_height)
 
         bbox_center_x = (x1 + x2) / 2
         bbox_center_y = (y1 + y2) / 2
@@ -177,11 +213,9 @@ class PTZTracker:
 
             pan_tilt_moved = False
             if abs(dx) > self.pan_tilt_tolerance:
-                direction = 'pan_left' if dx < 0 else 'pan_right'
-                pan_tilt_moved = self._safe_camera_command(direction) or pan_tilt_moved
+                pan_tilt_moved = self._safe_camera_command('pan_left' if dx < 0 else 'pan_right') or pan_tilt_moved
             if abs(dy) > self.pan_tilt_tolerance:
-                direction = 'tilt_up' if dy < 0 else 'tilt_down'
-                pan_tilt_moved = self._safe_camera_command(direction) or pan_tilt_moved
+                pan_tilt_moved = self._safe_camera_command('tilt_up' if dy < 0 else 'tilt_down') or pan_tilt_moved
 
             if pan_tilt_moved:
                 self.last_pan_tilt_adjust = current_time
@@ -224,6 +258,7 @@ class PTZTracker:
             self.consecutive_errors += 1
             print(f"Error executing camera command '{command}': {e}")
             return False
+
 
 class ModelManager:
     """
@@ -318,6 +353,7 @@ class ModelManager:
             )
         return None
 
+
 class RecordingManager:
     """
     Class that manages video recording. Can record continuously or by detection/inference triggers.
@@ -407,6 +443,7 @@ class RecordingManager:
         elif self.record_mode == "infn" and inference_result == "yes":
             self.stop_recording()
 
+
 class ImageUtils:
     """
     Utility class for image-related operations such as drawing bounding boxes and saving screenshots.
@@ -461,6 +498,7 @@ class ImageUtils:
             logging.error(f"Error saving screenshot: {e}")
             print(f"[{datetime.now().strftime('%Y%m%d_%H%M%S')}] Error saving screenshot: {e}")
 
+
 class AlertLogger:
     """
     A simple class to log alerts both to a dedicated file (alerts.log) and to the console.
@@ -486,6 +524,7 @@ class AlertLogger:
             logging.error(f"Error logging alert: {e}")
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')}] Error logging alert: {e}")
 
+
 class PTZController:
     """
     Class to control PTZ camera movements via HID commands.
@@ -501,7 +540,6 @@ class PTZController:
         :param usage_page: The HID usage page number.
         :param usage: The HID usage number.
         """
-        # If HID is not available, we cannot proceed.
         if not HID_AVAILABLE:
             raise RuntimeError("HID library unavailable; PTZController cannot be initialized.")
 
@@ -578,6 +616,7 @@ class PTZController:
             except Exception as e:
                 print(f"Error closing PTZ device: {e}")
 
+
 class YOFLO:
     """
     Main class to run object detection and/or expression comprehension using a loaded model.
@@ -652,6 +691,9 @@ class YOFLO:
         return self.model_manager.processor
 
     def update_inference_rate(self):
+        """
+        Updates the inference rate counter for real-time performance monitoring.
+        """
         try:
             if self.inference_start_time is None:
                 self.inference_start_time = time.time()
@@ -665,6 +707,10 @@ class YOFLO:
             logging.error(f"Error updating inference rate: {e}")
 
     def run_object_detection(self, image):
+        """
+        Runs object detection on the given PIL image using the loaded model.
+        Returns a dictionary with the recognized bounding boxes and labels, if any.
+        """
         try:
             task_prompt = "<OD>"
             inputs = self.processor(text=task_prompt, images=image, return_tensors="pt")
@@ -696,6 +742,10 @@ class YOFLO:
         return None
 
     def run_expression_comprehension(self, image, phrase):
+        """
+        Runs a single yes/no question for expression comprehension on a given PIL image.
+        Returns the raw generated text from the model's output.
+        """
         try:
             task_prompt = "<CAPTION_TO_EXPRESSION_COMPREHENSION>"
             inputs = self.processor(text=task_prompt, images=image, return_tensors="pt")
@@ -725,6 +775,10 @@ class YOFLO:
         return None
 
     def filter_detections(self, detections):
+        """
+        Filters out detections not matching the user-specified class names, if any.
+        Otherwise returns the entire list of detections.
+        """
         try:
             if not self.class_names:
                 return detections
@@ -739,6 +793,9 @@ class YOFLO:
         return detections
 
     def pretty_print_detections(self, detections):
+        """
+        Logs detection results in a neatly formatted text block.
+        """
         try:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             logging.info("\n" + "=" * 50)
@@ -766,6 +823,10 @@ class YOFLO:
             logging.error(f"Error in pretty_print_expression: {e}")
 
     def evaluate_inference_chain(self, image):
+        """
+        Evaluates multiple yes/no queries (inference chain) on the same frame,
+        returning a final pass/fail outcome plus a list of boolean results.
+        """
         try:
             if not self.inference_phrases:
                 logging.error("No inference phrases set.")
@@ -782,13 +843,23 @@ class YOFLO:
             return "FAIL", []
 
     def set_inference_phrases(self, phrases):
+        """
+        Stores multiple yes/no queries for subsequent inference chain evaluation.
+        """
         self.inference_phrases = phrases
         logging.info(f"Inference phrases set: {self.inference_phrases}")
 
     def download_model(self):
+        """
+        Wrapper for downloading the model from Hugging Face, if -dm was specified.
+        """
         return self.model_manager.download_and_load_model()
 
     def start_webcam_detection(self):
+        """
+        Spawns threads for each camera or RTSP source, continuously capturing frames
+        and processing them until stopped.
+        """
         try:
             if self.webcam_threads:
                 logging.warning("Webcam detection is already running.")
@@ -806,6 +877,9 @@ class YOFLO:
             logging.error(f"Error starting webcam detection: {e}")
 
     def stop_webcam_detection(self):
+        """
+        Signals all webcam threads to stop and waits for them to exit cleanly.
+        """
         try:
             self.object_detection_active = False
             self.stop_webcam_flag.set()
@@ -819,6 +893,10 @@ class YOFLO:
             logging.error(f"Error stopping webcam detection: {e}")
 
     def _webcam_detection_thread(self, source):
+        """
+        Thread function that captures frames from a single camera or RTSP source,
+        processes them, and optionally displays or records them.
+        """
         try:
             cap = cv2.VideoCapture(source)
             if not cap.isOpened():
@@ -871,13 +949,14 @@ class YOFLO:
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Error in detection thread {source}: {e}")
 
     def _pick_tracked_object(self, detections):
+        """
+        Chooses the largest bounding box corresponding to self.track_object_name,
+        if PTZ tracking is active.
+        """
         if not self.track_object_name:
             return None
-        candidate_detections = [
-            (bbox, label)
-            for bbox, label in detections
-            if label.lower() == self.track_object_name.lower()
-        ]
+        candidate_detections = [(bbox, label) for bbox, label in detections
+                                if label.lower() == self.track_object_name.lower()]
         if not candidate_detections:
             return None
 
@@ -888,6 +967,10 @@ class YOFLO:
         return largest_bbox
 
     def _process_frame(self, frame, image_pil, source):
+        """
+        Central per-frame logic that performs object detection and/or yes/no inference,
+        handles screenshots, logs, or triggers recordings.
+        """
         primary_bbox = None
 
         if self.object_detection_active:
@@ -961,13 +1044,13 @@ class YOFLO:
             frame_height, frame_width, _ = frame.shape
             self.ptz_tracker.adjust_camera(primary_bbox, frame_width, frame_height)
 
+
 def ptz_control_thread(ptz_camera):
     """
     A simple thread function for interactive PTZ control using arrow keys and +/- zoom on Windows.
 
     :param ptz_camera: A PTZController instance to control.
     """
-    # If we're not on Windows, mswcrt is unavailable.
     if not MSVCRT_AVAILABLE:
         logging.error("Interactive PTZ control is not available on this OS.")
         return
@@ -994,10 +1077,12 @@ def ptz_control_thread(ptz_camera):
             break
     ptz_camera.close()
 
+
 def main():
     """
     Main function to parse command-line arguments, configure and run the YO-FLO system,
-    including optional model download, PTZ camera setup, and webcam detection loops.
+    including optional model download, PTZ camera setup, webcam detection loops,
+    and YouTube stream handling via yt-dlp.
     """
     parser = argparse.ArgumentParser(
         description="YO-FLO: A proof-of-concept vision-language model as a YOLO alternative."
@@ -1019,6 +1104,7 @@ def main():
                         help="Enable PTZ control. If 'track' is supplied, autonomous tracking is enabled.")
     parser.add_argument("-to", "--track-object", type=str,
                         help="Specify the object class name to track when PTZ tracking is active.")
+    parser.add_argument("-yt", type=str, help="YouTube Live URL to process.")
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-mp", type=str, help="Path to the local pre-trained model directory.")
@@ -1031,6 +1117,15 @@ def main():
         setup_logging(args.lf)
         webcam_indices = args.wi if args.wi else [0]
         rtsp_urls = args.rtsp if args.rtsp else []
+
+        # If user specified a YouTube link, convert it to a direct .m3u8 or best stream URL
+        if args.yt:
+            youtube_m3u8_url = get_youtube_live_url(args.yt)
+            if not youtube_m3u8_url:
+                logging.error("Failed to retrieve a valid YouTube stream URL. Exiting.")
+                return
+            # We store it in rtsp_urls so we can reuse the same logic
+            rtsp_urls = [youtube_m3u8_url]
 
         if args.dm:
             yo_flo = YOFLO(
@@ -1115,6 +1210,7 @@ def main():
     else:
         input("Press Enter to stop...")
         yo_flo.stop_webcam_detection()
+
 
 if __name__ == "__main__":
     main()
