@@ -1,27 +1,29 @@
 #!/usr/bin/env python3
-# YOFLO-CLI (v1.0.1)
+# YOFLO-CLI (v1.0.2)
 # By: Charles C. Norton
 #
 # Main Python script providing advanced vision-language object detection,
 # yes/no inference, multi-step inference chaining, screenshot capture,
-# logging, and video recording. Now includes conditional HID importing
-# for optional PTZ camera control.
+# logging, and video recording. Now includes:
+#   - Conditional HID importing for PTZ (1.0.1)
+#   - Conditional msvcrt importing for Windows-only PTZ keyboard control (1.0.2)
 
 import argparse  # Library for command-line option parsing
 from datetime import datetime  # Library to handle date and time objects
 import logging  # Library for logging system
 import os  # Library for interacting with the operating system
+import sys  # System-specific parameters and functions
 import threading  # Library for concurrent threads
 import time  # Library to handle time-related functions
+
 import cv2  # OpenCV for computer vision
 import torch  # PyTorch for machine learning model operations
 from huggingface_hub import snapshot_download  # To download models from Hugging Face
 from PIL import Image  # Pillow library for image manipulation
 from transformers import AutoProcessor, AutoModelForCausalLM  # HF Transformers: model + processor
 from transformers import BitsAndBytesConfig  # HF Transformers quantization config
-import sys  # System-specific parameters and functions
 
-# >>> CHANGED FOR CONDITIONAL HID IMPORT <<<
+# >>> CONDITIONAL HID IMPORT <<<
 try:
     import hid  # Library for accessing HID devices
     HID_AVAILABLE = True
@@ -29,7 +31,13 @@ except ImportError:
     HID_AVAILABLE = False
     logging.warning("HID library not found. PTZ functionality disabled.")
 
-import msvcrt  # Windows-specific console keyboard reading (optional use)
+# >>> CONDITIONAL MSVCRT IMPORT (Windows only) <<<
+if sys.platform == "win32":
+    import msvcrt  # Windows-specific console keyboard reading
+    MSVCRT_AVAILABLE = True
+else:
+    MSVCRT_AVAILABLE = False
+    logging.warning("msvcrt module is unavailable; interactive PTZ keyboard control disabled.")
 
 def setup_logging(log_to_file, log_file_path="alerts.log"):
     """
@@ -117,7 +125,8 @@ class PTZTracker:
 
     def adjust_camera(self, bbox, frame_width, frame_height):
         """
-        Adjusts camera pan, tilt, and zoom to keep the object bounding box centered and sized per desired_ratio.
+        Adjusts camera pan, tilt, and zoom to keep the object bounding box centered
+        and sized according to the desired_ratio.
 
         :param bbox: A tuple (x1, y1, x2, y2) representing the object bounding box coordinates.
         :param frame_width: The width of the current frame in pixels.
@@ -138,10 +147,14 @@ class PTZTracker:
             self.smoothed_width = bbox_width
             self.smoothed_height = bbox_height
         else:
-            self.smoothed_width = (self.smoothing_factor * bbox_width
-                                   + (1 - self.smoothing_factor) * self.smoothed_width)
-            self.smoothed_height = (self.smoothing_factor * bbox_height
-                                    + (1 - self.smoothing_factor) * self.smoothed_height)
+            self.smoothed_width = (
+                self.smoothing_factor * bbox_width
+                + (1 - self.smoothing_factor) * self.smoothed_width
+            )
+            self.smoothed_height = (
+                self.smoothing_factor * bbox_height
+                + (1 - self.smoothing_factor) * self.smoothed_height
+            )
 
         bbox_center_x = (x1 + x2) / 2
         bbox_center_y = (y1 + y2) / 2
@@ -164,9 +177,11 @@ class PTZTracker:
 
             pan_tilt_moved = False
             if abs(dx) > self.pan_tilt_tolerance:
-                pan_tilt_moved = self._safe_camera_command('pan_left' if dx < 0 else 'pan_right') or pan_tilt_moved
+                direction = 'pan_left' if dx < 0 else 'pan_right'
+                pan_tilt_moved = self._safe_camera_command(direction) or pan_tilt_moved
             if abs(dy) > self.pan_tilt_tolerance:
-                pan_tilt_moved = self._safe_camera_command('tilt_up' if dy < 0 else 'tilt_down') or pan_tilt_moved
+                direction = 'tilt_up' if dy < 0 else 'tilt_down'
+                pan_tilt_moved = self._safe_camera_command(direction) or pan_tilt_moved
 
             if pan_tilt_moved:
                 self.last_pan_tilt_adjust = current_time
@@ -471,7 +486,6 @@ class AlertLogger:
             logging.error(f"Error logging alert: {e}")
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')}] Error logging alert: {e}")
 
-# >>> CHANGED FOR CONDITIONAL HID IMPORT <<<
 class PTZController:
     """
     Class to control PTZ camera movements via HID commands.
@@ -481,6 +495,7 @@ class PTZController:
     def __init__(self, vendor_id=0x046D, product_id=0x085F, usage_page=65280, usage=1):
         """
         Initializes the PTZController by attempting to open a HID device matching the given parameters.
+
         :param vendor_id: The USB vendor ID of the PTZ device.
         :param product_id: The USB product ID of the PTZ device.
         :param usage_page: The HID usage page number.
@@ -858,12 +873,17 @@ class YOFLO:
     def _pick_tracked_object(self, detections):
         if not self.track_object_name:
             return None
-        candidate_detections = [(bbox, label) for bbox, label in detections
-                                if label.lower() == self.track_object_name.lower()]
+        candidate_detections = [
+            (bbox, label)
+            for bbox, label in detections
+            if label.lower() == self.track_object_name.lower()
+        ]
         if not candidate_detections:
             return None
+
         def bbox_area(bbox):
             return (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+
         largest_bbox = max(candidate_detections, key=lambda x: bbox_area(x[0]))[0]
         return largest_bbox
 
@@ -947,6 +967,11 @@ def ptz_control_thread(ptz_camera):
 
     :param ptz_camera: A PTZController instance to control.
     """
+    # If we're not on Windows, mswcrt is unavailable.
+    if not MSVCRT_AVAILABLE:
+        logging.error("Interactive PTZ control is not available on this OS.")
+        return
+
     print("PTZ control started. Use arrow keys to pan/tilt, +/- to zoom, q to quit.")
     while True:
         ch = msvcrt.getch()
@@ -1055,7 +1080,6 @@ def main():
 
         ptz_thread = None
         ptz_camera = None
-        # >>> CHANGED FOR CONDITIONAL HID IMPORT <<<
         if args.ptz is not None:
             if not HID_AVAILABLE:
                 logging.error("Cannot enable PTZ control because HID library is not available.")
