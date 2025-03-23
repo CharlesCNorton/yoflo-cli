@@ -1,3 +1,12 @@
+#!/usr/bin/env python3
+# YOFLO-CLI (v1.0.1)
+# By: Charles C. Norton
+#
+# Main Python script providing advanced vision-language object detection,
+# yes/no inference, multi-step inference chaining, screenshot capture,
+# logging, and video recording. Now includes conditional HID importing
+# for optional PTZ camera control.
+
 import argparse  # Library for command-line option parsing
 from datetime import datetime  # Library to handle date and time objects
 import logging  # Library for logging system
@@ -11,8 +20,16 @@ from PIL import Image  # Pillow library for image manipulation
 from transformers import AutoProcessor, AutoModelForCausalLM  # HF Transformers: model + processor
 from transformers import BitsAndBytesConfig  # HF Transformers quantization config
 import sys  # System-specific parameters and functions
-import hid  # Library for accessing HID devices
-import msvcrt  # Windows-specific console keyboard reading
+
+# >>> CHANGED FOR CONDITIONAL HID IMPORT <<<
+try:
+    import hid  # Library for accessing HID devices
+    HID_AVAILABLE = True
+except ImportError:
+    HID_AVAILABLE = False
+    logging.warning("HID library not found. PTZ functionality disabled.")
+
+import msvcrt  # Windows-specific console keyboard reading (optional use)
 
 def setup_logging(log_to_file, log_file_path="alerts.log"):
     """
@@ -454,6 +471,7 @@ class AlertLogger:
             logging.error(f"Error logging alert: {e}")
             print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')}] Error logging alert: {e}")
 
+# >>> CHANGED FOR CONDITIONAL HID IMPORT <<<
 class PTZController:
     """
     Class to control PTZ camera movements via HID commands.
@@ -463,12 +481,15 @@ class PTZController:
     def __init__(self, vendor_id=0x046D, product_id=0x085F, usage_page=65280, usage=1):
         """
         Initializes the PTZController by attempting to open a HID device matching the given parameters.
-
         :param vendor_id: The USB vendor ID of the PTZ device.
         :param product_id: The USB product ID of the PTZ device.
         :param usage_page: The HID usage page number.
         :param usage: The HID usage number.
         """
+        # If HID is not available, we cannot proceed.
+        if not HID_AVAILABLE:
+            raise RuntimeError("HID library unavailable; PTZController cannot be initialized.")
+
         self.device = None
         try:
             ptz_path = None
@@ -1034,21 +1055,25 @@ def main():
 
         ptz_thread = None
         ptz_camera = None
+        # >>> CHANGED FOR CONDITIONAL HID IMPORT <<<
         if args.ptz is not None:
-            if args.ptz.lower() == 'track':
-                ptz_camera = PTZController()
-                ptz_tracker = PTZTracker(ptz_camera)
-                ptz_tracker.activate(True)
-                yo_flo.ptz_tracker = ptz_tracker
+            if not HID_AVAILABLE:
+                logging.error("Cannot enable PTZ control because HID library is not available.")
             else:
-                try:
-                    ptz_index = int(args.ptz)
-                except ValueError:
-                    ptz_index = 0
-                print(f"Initializing PTZ control for camera index: {ptz_index}")
-                ptz_camera = PTZController()
-                ptz_thread = threading.Thread(target=ptz_control_thread, args=(ptz_camera,))
-                ptz_thread.start()
+                if args.ptz.lower() == 'track':
+                    ptz_camera = PTZController()
+                    ptz_tracker = PTZTracker(ptz_camera)
+                    ptz_tracker.activate(True)
+                    yo_flo.ptz_tracker = ptz_tracker
+                else:
+                    try:
+                        ptz_index = int(args.ptz)
+                    except ValueError:
+                        ptz_index = 0
+                    print(f"Initializing PTZ control for camera index: {ptz_index}")
+                    ptz_camera = PTZController()
+                    ptz_thread = threading.Thread(target=ptz_control_thread, args=(ptz_camera,))
+                    ptz_thread.start()
 
         try:
             while True:
