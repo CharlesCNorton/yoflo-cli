@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# YOFLO-CLI (v1.2.0)
+# YOFLO-CLI (v1.3.0)
 #
 # By: Charles C. Norton
 #
@@ -29,11 +29,19 @@ import sys  # System-specific parameters and functions
 
 # Conditional import for PTZ HID usage:
 try:
-    import hid  # Library for accessing HID devices
+    import hid
     HID_AVAILABLE = True
 except ImportError:
     HID_AVAILABLE = False
-    logging.warning("HID library not found. PTZ functionality disabled.")
+    logging.warning("HID library not found. HID PTZ functionality disabled.")
+
+# Conditional import for ONVIF PTZ usage:
+try:
+    from onvif import ONVIFCamera
+    ONVIF_AVAILABLE = True
+except ImportError:
+    ONVIF_AVAILABLE = False
+    logging.warning("onvif-zeep library not found. ONVIF PTZ functionality disabled.")
 
 # Conditional import for Windows-specific console keyboard reading:
 if sys.platform == "win32":
@@ -628,6 +636,166 @@ class PTZController:
                 print(f"Error closing PTZ device: {e}")
 
 
+class ONVIFPTZController:
+    """
+    Class to control PTZ camera movements via ONVIF protocol.
+    Works with most IP PTZ cameras (Hikvision, Dahua, Axis, Hanwha, etc.).
+    """
+
+    def __init__(self, host, port=80, user="admin", password="", wsdl_dir=None):
+        """
+        Initializes the ONVIF PTZ controller.
+
+        :param host: IP address or hostname of the camera.
+        :param port: HTTP port (usually 80 or 8080).
+        :param user: Username for authentication.
+        :param password: Password for authentication.
+        :param wsdl_dir: Optional path to ONVIF WSDL files.
+        """
+        if not ONVIF_AVAILABLE:
+            raise RuntimeError("onvif-zeep library unavailable. Install with: pip install onvif-zeep")
+
+        self.camera = None
+        self.ptz_service = None
+        self.media_service = None
+        self.profile_token = None
+        self.move_speed = {"pan": 0.5, "tilt": 0.5, "zoom": 0.5}
+
+        try:
+            print(f"Connecting to ONVIF camera at {host}:{port}...")
+            if wsdl_dir:
+                self.camera = ONVIFCamera(host, port, user, password, wsdl_dir)
+            else:
+                self.camera = ONVIFCamera(host, port, user, password)
+
+            self.media_service = self.camera.create_media_service()
+            profiles = self.media_service.GetProfiles()
+            if not profiles:
+                raise RuntimeError("No media profiles found on camera.")
+            self.profile_token = profiles[0].token
+
+            self.ptz_service = self.camera.create_ptz_service()
+            print(f"ONVIF PTZ connected successfully. Profile: {self.profile_token}")
+
+        except Exception as e:
+            print(f"Error connecting to ONVIF camera: {e}")
+            self.camera = None
+
+    def _continuous_move(self, pan=0, tilt=0, zoom=0, duration=0.3):
+        """Performs a continuous move then stops."""
+        if not self.ptz_service:
+            print("PTZ service not initialized.")
+            return
+
+        try:
+            request = self.ptz_service.create_type('ContinuousMove')
+            request.ProfileToken = self.profile_token
+            request.Velocity = {
+                'PanTilt': {'x': pan, 'y': tilt},
+                'Zoom': {'x': zoom}
+            }
+            self.ptz_service.ContinuousMove(request)
+            time.sleep(duration)
+            self.stop()
+        except Exception as e:
+            print(f"Error during PTZ move: {e}")
+
+    def stop(self):
+        """Stops all PTZ movement."""
+        if not self.ptz_service:
+            return
+        try:
+            request = self.ptz_service.create_type('Stop')
+            request.ProfileToken = self.profile_token
+            request.PanTilt = True
+            request.Zoom = True
+            self.ptz_service.Stop(request)
+        except Exception as e:
+            print(f"Error stopping PTZ: {e}")
+
+    def pan_right(self):
+        """Pans the camera to the right."""
+        self._continuous_move(pan=self.move_speed["pan"])
+
+    def pan_left(self):
+        """Pans the camera to the left."""
+        self._continuous_move(pan=-self.move_speed["pan"])
+
+    def tilt_up(self):
+        """Tilts the camera upward."""
+        self._continuous_move(tilt=self.move_speed["tilt"])
+
+    def tilt_down(self):
+        """Tilts the camera downward."""
+        self._continuous_move(tilt=-self.move_speed["tilt"])
+
+    def zoom_in(self):
+        """Zooms the camera in."""
+        self._continuous_move(zoom=self.move_speed["zoom"])
+
+    def zoom_out(self):
+        """Zooms the camera out."""
+        self._continuous_move(zoom=-self.move_speed["zoom"])
+
+    def go_to_preset(self, preset_token):
+        """Moves camera to a saved preset position."""
+        if not self.ptz_service:
+            print("PTZ service not initialized.")
+            return
+        try:
+            request = self.ptz_service.create_type('GotoPreset')
+            request.ProfileToken = self.profile_token
+            request.PresetToken = preset_token
+            self.ptz_service.GotoPreset(request)
+            print(f"Moving to preset: {preset_token}")
+        except Exception as e:
+            print(f"Error going to preset: {e}")
+
+    def get_presets(self):
+        """Returns list of available preset positions."""
+        if not self.ptz_service:
+            return []
+        try:
+            presets = self.ptz_service.GetPresets({'ProfileToken': self.profile_token})
+            return [(p.token, p.Name) for p in presets]
+        except Exception as e:
+            print(f"Error getting presets: {e}")
+            return []
+
+    def set_move_speed(self, pan=None, tilt=None, zoom=None):
+        """Sets the movement speed (0.0 to 1.0) for PTZ operations."""
+        if pan is not None:
+            self.move_speed["pan"] = max(0.0, min(1.0, pan))
+        if tilt is not None:
+            self.move_speed["tilt"] = max(0.0, min(1.0, tilt))
+        if zoom is not None:
+            self.move_speed["zoom"] = max(0.0, min(1.0, zoom))
+
+    def get_stream_uri(self):
+        """Returns the RTSP stream URI for the camera."""
+        if not self.media_service:
+            return None
+        try:
+            request = self.media_service.create_type('GetStreamUri')
+            request.ProfileToken = self.profile_token
+            request.StreamSetup = {
+                'Stream': 'RTP-Unicast',
+                'Transport': {'Protocol': 'RTSP'}
+            }
+            response = self.media_service.GetStreamUri(request)
+            return response.Uri
+        except Exception as e:
+            print(f"Error getting stream URI: {e}")
+            return None
+
+    def close(self):
+        """Closes the ONVIF connection."""
+        self.stop()
+        self.camera = None
+        self.ptz_service = None
+        print("ONVIF PTZ connection closed.")
+
+
 class YOFLO:
     """
     Main class to run object detection and/or expression comprehension using a loaded model.
@@ -1114,7 +1282,15 @@ def main():
     parser.add_argument("-r", choices=["od", "infy", "infn"], help="Video recording mode.")
     parser.add_argument("-4bit", action="store_true", help="Enable 4-bit quantization.")
     parser.add_argument("-ptz", nargs='?', const='0',
-                        help="Enable PTZ control. If 'track' is supplied, autonomous tracking is enabled.")
+                        help="Enable HID PTZ control. If 'track' is supplied, autonomous tracking is enabled.")
+    parser.add_argument("-onvif", type=str, metavar="HOST",
+                        help="Enable ONVIF PTZ control. Specify camera IP/hostname.")
+    parser.add_argument("-onvif-port", type=int, default=80,
+                        help="ONVIF camera port (default: 80).")
+    parser.add_argument("-onvif-user", type=str, default="admin",
+                        help="ONVIF camera username (default: admin).")
+    parser.add_argument("-onvif-pass", type=str, default="",
+                        help="ONVIF camera password.")
     parser.add_argument("-to", "--track-object", type=str,
                         help="Specify the object class name to track when PTZ tracking is active.")
     parser.add_argument("-yt", type=str, help="YouTube Live URL to process.")
@@ -1188,9 +1364,45 @@ def main():
 
         ptz_thread = None
         ptz_camera = None
-        if args.ptz is not None:
+
+        # ONVIF PTZ takes precedence over HID PTZ
+        if args.onvif is not None:
+            if not ONVIF_AVAILABLE:
+                logging.error("Cannot enable ONVIF PTZ: onvif-zeep library not installed.")
+                logging.error("Install with: pip install onvif-zeep")
+            else:
+                try:
+                    ptz_camera = ONVIFPTZController(
+                        host=args.onvif,
+                        port=args.onvif_port,
+                        user=args.onvif_user,
+                        password=args.onvif_pass
+                    )
+                    if ptz_camera.camera is not None:
+                        # Auto-get RTSP stream from ONVIF camera if no other source specified
+                        if not rtsp_urls and not args.wi:
+                            stream_uri = ptz_camera.get_stream_uri()
+                            if stream_uri:
+                                print(f"Using ONVIF camera stream: {stream_uri}")
+                                rtsp_urls = [stream_uri]
+                                yo_flo.rtsp_urls = rtsp_urls
+
+                        # Enable tracking if track_object is specified
+                        if args.track_object:
+                            ptz_tracker = PTZTracker(ptz_camera)
+                            ptz_tracker.activate(True)
+                            yo_flo.ptz_tracker = ptz_tracker
+                            print(f"ONVIF PTZ tracking enabled for: {args.track_object}")
+                        else:
+                            print("ONVIF PTZ connected. Use -to to enable auto-tracking.")
+                    else:
+                        logging.error("Failed to connect to ONVIF camera.")
+                except Exception as e:
+                    logging.error(f"Error initializing ONVIF PTZ: {e}")
+
+        elif args.ptz is not None:
             if not HID_AVAILABLE:
-                logging.error("Cannot enable PTZ control because HID library is not available.")
+                logging.error("Cannot enable HID PTZ control because HID library is not available.")
             else:
                 if args.ptz.lower() == 'track':
                     ptz_camera = PTZController()
@@ -1202,7 +1414,7 @@ def main():
                         ptz_index = int(args.ptz)
                     except ValueError:
                         ptz_index = 0
-                    print(f"Initializing PTZ control for camera index: {ptz_index}")
+                    print(f"Initializing HID PTZ control for camera index: {ptz_index}")
                     ptz_camera = PTZController()
                     ptz_thread = threading.Thread(target=ptz_control_thread, args=(ptz_camera,))
                     ptz_thread.start()

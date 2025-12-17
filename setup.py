@@ -2,12 +2,12 @@ from setuptools import setup, find_packages
 
 setup(
     name='yoflo',
-    version='1.2.0',
+    version='1.3.0',
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
         'packages',
-	'packaging',
+        'packaging',
         'torch',
         'timm',
         'transformers>=4.38.0',
@@ -17,9 +17,14 @@ setup(
         'huggingface_hub',
         'datasets',
         'flash-attn',
-	'yt_dlp',
+        'yt_dlp',
         'scipy'
     ],
+    extras_require={
+        'onvif': ['onvif-zeep'],
+        'hid': ['hid'],
+        'all': ['onvif-zeep', 'hid'],
+    },
     entry_points={
         'console_scripts': [
             'yoflo=yoflo.yoflo:main',

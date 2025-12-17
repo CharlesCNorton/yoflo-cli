@@ -134,17 +134,40 @@ Reduce VRAM usage with quantized model.
 python -m yoflo -dm -od -4bit
 ```
 
-### PTZ Camera Control (`-ptz`)
+### PTZ Camera Control
 
-Control pan/tilt/zoom cameras. Requires HID-compatible PTZ hardware.
+Control pan/tilt/zoom cameras via HID (USB) or ONVIF (IP network).
 
+**HID PTZ** (Logitech PTZ Pro, etc.):
 ```bash
+pip install hid
+
 # Manual PTZ control with keyboard
 python -m yoflo -dm -od -ptz
 
 # Auto-track an object class
 python -m yoflo -dm -od person -ptz track -to person
 ```
+
+**ONVIF PTZ** (Hikvision, Dahua, Axis, most IP cameras):
+```bash
+pip install onvif-zeep
+# or: pip install yoflo[onvif]
+
+# Connect to ONVIF camera and auto-track
+python -m yoflo -dm -od person -onvif 192.168.1.100 -onvif-user admin -onvif-pass password -to person
+
+# ONVIF will auto-detect the camera's RTSP stream if no other source specified
+```
+
+| Flag | Description |
+|------|-------------|
+| `-ptz` | Enable HID PTZ (USB cameras) |
+| `-onvif HOST` | Enable ONVIF PTZ (IP cameras) |
+| `-onvif-port N` | ONVIF port (default: 80) |
+| `-onvif-user USER` | ONVIF username (default: admin) |
+| `-onvif-pass PASS` | ONVIF password |
+| `-to CLASS` | Object class to auto-track |
 
 ## Daemon Mode
 
@@ -205,7 +228,11 @@ Use `-dm` to auto-download, or `-mp /path/to/model` for local models.
 | `-yt URL` | YouTube live stream URL |
 | `-r od\|infy\|infn` | Recording trigger mode |
 | `-4bit` | 4-bit quantization |
-| `-ptz [track]` | PTZ control |
+| `-ptz [track]` | HID PTZ control (USB cameras) |
+| `-onvif HOST` | ONVIF PTZ control (IP cameras) |
+| `-onvif-port N` | ONVIF port (default: 80) |
+| `-onvif-user USER` | ONVIF username |
+| `-onvif-pass PASS` | ONVIF password |
 | `-to CLASS` | Object class to track |
 
 ## Requirements
