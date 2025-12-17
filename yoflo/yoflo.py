@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# YOFLO-CLI (v1.1.0)
+# YOFLO-CLI (v1.1.2)
 #
 # By: Charles C. Norton
 #
@@ -50,6 +50,17 @@ try:
 except ImportError:
     YT_DLP_AVAILABLE = False
     logging.warning("yt-dlp not installed. YouTube stream handling disabled.")
+
+# Monkeypatch to fix Florence-2 compatibility with transformers 4.45+
+# The Florence-2 model code lacks the _supports_sdpa attribute that newer
+# transformers versions check. This patch enables SDPA (faster attention).
+from transformers.modeling_utils import PreTrainedModel
+_original_pretrained_getattr = PreTrainedModel.__getattr__
+def _patched_pretrained_getattr(self, name):
+    if name == '_supports_sdpa':
+        return True
+    return _original_pretrained_getattr(self, name)
+PreTrainedModel.__getattr__ = _patched_pretrained_getattr
 
 
 def setup_logging(log_to_file, log_file_path="alerts.log"):
@@ -727,6 +738,7 @@ class YOFLO:
                     early_stopping=False,
                     do_sample=False,
                     num_beams=1,
+                    use_cache=False,
                 )
                 generated_text = self.processor.batch_decode(
                     generated_ids, skip_special_tokens=False
@@ -765,6 +777,7 @@ class YOFLO:
                     early_stopping=False,
                     do_sample=False,
                     num_beams=1,
+                    use_cache=False,
                 )
                 generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
             return generated_text
