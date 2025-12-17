@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# YOFLO-CLI (v1.1.2)
+# YOFLO-CLI (v1.2.0)
 #
 # By: Charles C. Norton
 #
