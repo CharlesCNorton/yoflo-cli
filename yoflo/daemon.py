@@ -82,7 +82,8 @@ def start_daemon(model_size="large", work_dir=None):
     print(f"Work directory: {work_dir}")
     print(f"Model: Florence-2-{model_size}-ft")
 
-    from yoflo.yoflo import YOFLO, get_youtube_live_url
+    from yoflo.core import YOFLO
+    from yoflo.utils import get_youtube_stream_url as get_youtube_live_url
     import cv2
     from PIL import Image
 

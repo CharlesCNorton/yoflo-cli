@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='yoflo',
-    version='1.3.0',
+    version='1.4.0',
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
@@ -27,7 +27,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'yoflo=yoflo.yoflo:main',
+            'yoflo=yoflo.cli:main',
         ],
     },
     author='Charles Norton',
